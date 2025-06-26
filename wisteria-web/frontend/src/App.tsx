@@ -10,6 +10,9 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
+  // Panel control state
+  const [showCreateSessionPanel, setShowCreateSessionPanel] = useState(false);
+  
   // Form states
   const [researchGoal, setResearchGoal] = useState('');
   const [selectedModel, setSelectedModel] = useState('');
@@ -69,9 +72,40 @@ function App() {
       setCurrentHypothesis(null);
       setSessionHypotheses([]);
       setHypothesisIndex(0);
+
+      // Generate first hypothesis immediately with comments/image if provided
+      const commentsToSend = feedback.trim() || undefined;
+      const hypothesisResult = await apiService.generateHypothesis(result.data.id, commentsToSend, attachedImage || undefined);
+      
+      if (hypothesisResult.data) {
+        setCurrentHypothesis(hypothesisResult.data);
+        setSessionHypotheses([hypothesisResult.data]);
+        setHypothesisIndex(0);
+        
+        // Refresh session to get updated hypothesis count
+        const sessionResult = await apiService.getSession(result.data.id);
+        if (sessionResult.data) {
+          updateSessionData(sessionResult.data);
+          // Keep local hypothesis list in sync with backend
+          if (sessionResult.data.hypotheses && sessionResult.data.hypotheses.length > 0) {
+            setSessionHypotheses(sessionResult.data.hypotheses);
+            setHypothesisIndex(sessionResult.data.hypotheses.length - 1);
+          }
+        }
+        
+        // Reload the entire sessions list to ensure the left panel shows updated info
+        await loadSessions();
+      }
+
+      // Clear form data
       setResearchGoal('');
       setSelectedModel('');
       setApiKey('');
+      setFeedback('');
+      removeAttachedImage();
+      
+      // Switch back to hypothesis panel
+      setShowCreateSessionPanel(false);
     } else {
       setError(result.error || 'Failed to create session');
     }
@@ -101,6 +135,8 @@ function App() {
       // navigation and feedback functionality work immediately.
       setSessionHypotheses([result.data]);
       setHypothesisIndex(0);
+      // Switch back to hypothesis panel after generating first hypothesis
+      setShowCreateSessionPanel(false);
       // Refresh session to get updated hypothesis count
       const sessionResult = await apiService.getSession(currentSession.id);
       if (sessionResult.data) {
@@ -111,6 +147,9 @@ function App() {
           setHypothesisIndex(sessionResult.data.hypotheses.length - 1);
         }
       }
+      
+      // Reload sessions list to update hypothesis count in left panel
+      await loadSessions();
       // Clear attached image after successful generation
       removeAttachedImage();
     } else {
@@ -139,6 +178,9 @@ function App() {
           setHypothesisIndex(sessionResult.data.hypotheses.length - 1);
         }
       }
+      
+      // Reload sessions list to update hypothesis count in left panel
+      await loadSessions();
       // Clear attached image after successful generation
       removeAttachedImage();
     } else {
@@ -168,6 +210,9 @@ function App() {
           setHypothesisIndex(sessionResult.data.hypotheses.length - 1);
         }
       }
+      
+      // Reload sessions list to update hypothesis count in left panel
+      await loadSessions();
       // Clear attached image after successful generation
       removeAttachedImage();
     } else {
@@ -180,13 +225,16 @@ function App() {
     setCurrentSession(session);
     setCurrentHypothesis(null);
     setHypothesisIndex(0);
+    // Switch to hypothesis panel when selecting a session
+    setShowCreateSessionPanel(false);
     
     // Load session details with hypotheses
     const result = await apiService.getSession(session.id);
     if (result.data && result.data.hypotheses && result.data.hypotheses.length > 0) {
+      const latestIndex = result.data.hypotheses.length - 1;
       setSessionHypotheses(result.data.hypotheses);
-      setCurrentHypothesis(result.data.hypotheses[0]);
-      setHypothesisIndex(0);
+      setCurrentHypothesis(result.data.hypotheses[latestIndex]);
+      setHypothesisIndex(latestIndex);
     } else {
       setSessionHypotheses([]);
     }
@@ -289,52 +337,20 @@ function App() {
           {/* Left Panel - Sessions */}
           <div>
             <div className="card">
-              <h2>Sessions</h2>
-              
-              {/* Create New Session */}
-              <div className="card" style={{ marginBottom: '1.5rem' }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: '500', marginBottom: '0.75rem' }}>Create New Session</h3>
-                <div>
-                  <div className="form-group">
-                    <textarea
-                      value={researchGoal}
-                      onChange={(e) => setResearchGoal(e.target.value)}
-                      placeholder="Enter your research goal..."
-                      className="form-control"
-                      style={{ height: '80px' }}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <select
-                      value={selectedModel}
-                      onChange={(e) => setSelectedModel(e.target.value)}
-                      className="form-control"
-                    >
-                      <option value="">Select a model</option>
-                      {models.map((model) => (
-                        <option key={model.shortname} value={model.shortname}>
-                          {model.shortname} ({model.model_name})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group" style={{ paddingRight: '17px' }}>
-                    <input
-                      type="text"
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      placeholder="Enter your API key..."
-                      className="form-control"
-                    />
-                  </div>
-                  <button
-                    onClick={createNewSession}
-                    disabled={loading || !researchGoal.trim() || !selectedModel}
-                    className="btn btn-primary w-full"
-                  >
-                    {loading ? 'Creating...' : 'Create Session'}
-                  </button>
-                </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h2 style={{ margin: 0 }}>Sessions</h2>
+                <button
+                  onClick={() => {
+                    setShowCreateSessionPanel(true);
+                    setCurrentSession(null);
+                    setCurrentHypothesis(null);
+                    setSessionHypotheses([]);
+                    setHypothesisIndex(0);
+                  }}
+                  className="btn btn-primary btn-sm"
+                >
+                  Start New Session
+                </button>
               </div>
 
               {/* Session List */}
@@ -380,10 +396,123 @@ function App() {
             </div>
           </div>
 
-          {/* Right Panel - Hypothesis Viewer */}
+          {/* Right Panel - Create Session or Hypothesis Viewer */}
           <div>
             <div className="card">
-              {currentSession ? (
+              {showCreateSessionPanel ? (
+                <div>
+                  <h2>Create New Session</h2>
+                  <div className="form-group">
+                    <label>Research Goal</label>
+                    <textarea
+                      value={researchGoal}
+                      onChange={(e) => setResearchGoal(e.target.value)}
+                      placeholder="Enter your research goal..."
+                      className="form-control"
+                      style={{ height: '80px' }}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Model</label>
+                    <select
+                      value={selectedModel}
+                      onChange={(e) => setSelectedModel(e.target.value)}
+                      className="form-control"
+                    >
+                      <option value="">Select a model</option>
+                      {models.map((model) => (
+                        <option key={model.shortname} value={model.shortname}>
+                          {model.shortname} ({model.model_name})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>API Key</label>
+                    <input
+                      type="text"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder="Enter your API key..."
+                      className="form-control"
+                    />
+                  </div>
+                  
+                  {/* Additional Comments for first hypothesis */}
+                  <div className="form-group">
+                    <label>Additional Comments (for first hypothesis)</label>
+                    <textarea
+                      value={feedback}
+                      onChange={(e) => setFeedback(e.target.value)}
+                      placeholder="Enter any comments or context for the first hypothesis..."
+                      className="form-control"
+                      style={{ height: '80px' }}
+                    />
+                  </div>
+                  
+                  {/* Attach Image functionality */}
+                  <div className="form-group">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <label>Attach Image (optional)</label>
+                      <button
+                        onClick={handleImageAttachment}
+                        className="btn btn-outline-secondary btn-sm"
+                        type="button"
+                      >
+                        📎 Attach Image
+                      </button>
+                    </div>
+                    
+                    {/* Image Preview */}
+                    {imagePreview && (
+                      <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '0.375rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                          <h4 style={{ margin: 0, fontSize: '0.875rem', fontWeight: '500' }}>Attached Image</h4>
+                          <button
+                            onClick={removeAttachedImage}
+                            className="btn btn-outline-danger btn-sm"
+                            style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'center' }}>
+                          <img
+                            src={imagePreview}
+                            alt="Attached"
+                            style={{
+                              maxWidth: '100%',
+                              maxHeight: '200px',
+                              objectFit: 'contain',
+                              border: '1px solid #e5e7eb',
+                              borderRadius: '0.375rem'
+                            }}
+                          />
+                        </div>
+                        <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.75rem', color: '#6b7280' }}>
+                          {attachedImage?.name} ({((attachedImage?.size || 0) / 1024 / 1024).toFixed(2)} MB)
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem' }}>
+                    <button
+                      onClick={createNewSession}
+                      disabled={loading || !researchGoal.trim() || !selectedModel}
+                      className="btn btn-primary"
+                    >
+                      {loading ? 'Creating Session & Generating Hypothesis...' : 'Create Session & Generate Hypothesis'}
+                    </button>
+                    <button
+                      onClick={() => setShowCreateSessionPanel(false)}
+                      className="btn btn-outline-secondary"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : currentSession ? (
                 <div>
                   <div className="hypothesis-header">
                     <h2>Session: {currentSession.research_goal}</h2>
@@ -394,67 +523,7 @@ function App() {
 
                   {!currentHypothesis ? (
                     <div className="text-center p-8">
-                      <p className="text-gray-500 mb-4">No hypothesis generated yet</p>
-                      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
-                        <button
-                          onClick={generateHypothesis}
-                          disabled={loading}
-                          className="btn btn-success"
-                        >
-                          {loading ? 'Generating...' : 'Generate First Hypothesis'}
-                        </button>
-                        <button
-                          onClick={handleImageAttachment}
-                          className="btn btn-outline-secondary"
-                          title="Attach image"
-                        >
-                          📎
-                        </button>
-                      </div>
-                      
-                      {/* Include Comments */}
-                      <div className="mt-4" style={{ maxWidth: '500px', margin: '0 auto' }}>
-                        <h4>Include Comments</h4>
-                        <textarea
-                          value={feedback}
-                          onChange={(e) => setFeedback(e.target.value)}
-                          placeholder="Enter any comments or context for the first hypothesis..."
-                          className="form-control"
-                          style={{ height: '80px' }}
-                        />
-                      </div>
-                      
-                      {/* Image Preview */}
-                      {imagePreview && (
-                        <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '0.375rem' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                            <h4 style={{ margin: 0, fontSize: '0.875rem', fontWeight: '500' }}>Attached Image</h4>
-                            <button
-                              onClick={removeAttachedImage}
-                              className="btn btn-outline-danger btn-sm"
-                              style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
-                            >
-                              Remove
-                            </button>
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'center' }}>
-                            <img
-                              src={imagePreview}
-                              alt="Attached"
-                              style={{
-                                maxWidth: '100%',
-                                maxHeight: '200px',
-                                objectFit: 'contain',
-                                border: '1px solid #e5e7eb',
-                                borderRadius: '0.375rem'
-                              }}
-                            />
-                          </div>
-                          <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.75rem', color: '#6b7280' }}>
-                            {attachedImage?.name} ({((attachedImage?.size || 0) / 1024 / 1024).toFixed(2)} MB)
-                          </p>
-                        </div>
-                      )}
+                      <p className="text-gray-500 mb-4">No hypothesis generated yet. Click "Start New Session" to create one.</p>
                     </div>
                   ) : (
                     <div>
