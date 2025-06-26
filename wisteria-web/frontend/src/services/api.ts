@@ -1,7 +1,9 @@
 import axios from 'axios';
 import { Session, Hypothesis, Model, ApiResponse } from '../types/hypothesis';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://dev-5.bv-brc.org/api';
+
+console.log('API_BASE_URL configured as:', API_BASE_URL);
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -24,9 +26,12 @@ export const apiService = {
   // Get available models
   getModels: async (): Promise<ApiResponse<Model[]>> => {
     try {
+      console.log('API: Making request to', `${API_BASE_URL}/models`);
       const response = await api.get('/models');
+      console.log('API: getModels response:', response.data);
       return { data: response.data.models };
     } catch (error: any) {
+      console.error('API: getModels error:', error);
       return { error: error.response?.data?.error || 'Failed to fetch models' };
     }
   },
@@ -34,20 +39,29 @@ export const apiService = {
   // Get all sessions
   getSessions: async (): Promise<ApiResponse<Session[]>> => {
     try {
+      console.log('API: Making request to', `${API_BASE_URL}/sessions`);
       const response = await api.get('/sessions');
+      console.log('API: getSessions response:', response.data);
       return { data: response.data.sessions };
     } catch (error: any) {
+      console.error('API: getSessions error:', error);
       return { error: error.response?.data?.error || 'Failed to fetch sessions' };
     }
   },
 
   // Create new session
-  createSession: async (researchGoal: string, modelShortname: string): Promise<ApiResponse<Session>> => {
+  createSession: async (researchGoal: string, modelShortname: string, apiKey?: string): Promise<ApiResponse<Session>> => {
     try {
-      const response = await api.post('/sessions', {
+      const payload: any = {
         research_goal: researchGoal,
         model_shortname: modelShortname,
-      });
+      };
+      
+      if (apiKey && apiKey.trim()) {
+        payload.api_key = apiKey;
+      }
+      
+      const response = await api.post('/sessions', payload);
       return { data: response.data.session, message: response.data.message };
     } catch (error: any) {
       return { error: error.response?.data?.error || 'Failed to create session' };

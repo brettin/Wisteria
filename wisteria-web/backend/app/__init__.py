@@ -21,7 +21,20 @@ def create_app():
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
     # Initialize extensions
-    CORS(app, origins=["http://localhost:3000", "http://127.0.0.1:3000"])
+    CORS(app, 
+         origins=[
+             "http://localhost:12001",
+             "http://127.0.0.1:12001", 
+             "http://ash:12001",
+             "http://140.221.78.67:12001",  # Network IP from your frontend
+             "https://dev-1.bv-brc.org",   # Production frontend URL
+             "http://dev-5.bv-brc.org",    # New production URL
+             "https://dev-5.bv-brc.org"    # New production URL (HTTPS)
+         ],
+         methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+         allow_headers=['Content-Type', 'Authorization'],
+         supports_credentials=True
+    )
     db.init_app(app)
     socketio.init_app(app, cors_allowed_origins="*")
     

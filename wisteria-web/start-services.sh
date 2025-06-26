@@ -73,7 +73,7 @@ fi
 (
     cd "$SCRIPT_DIR/frontend"
     echo "Frontend starting from: $(pwd)"
-    npm start
+    CI=true PORT=12001 npm start | cat
 ) &
 FRONTEND_PID=$!
 
@@ -92,9 +92,9 @@ echo "✅ Frontend started successfully (PID: $FRONTEND_PID)"
 
 echo "======================================"
 echo "✅ Services started successfully!"
-echo "🌐 Backend API: http://localhost:5001"
-echo "🎯 Frontend UI: http://localhost:3000"
-echo "📖 API Documentation: http://localhost:5001/api/health"
+echo "🌐 Backend API: http://localhost:12005"
+echo "🎯 Frontend UI: http://localhost:12001"
+echo "📖 API Documentation: http://localhost:12005/api/health"
 echo ""
 echo "Press Ctrl+C to stop all services"
 echo "======================================"

@@ -48,24 +48,24 @@ kill_processes "react-scripts.*start" "Frontend (React)"
 kill_processes "node.*react-scripts" "Node.js React"
 
 # Kill any processes on the specific ports we use
-echo "Checking for processes on ports 3000 and 5001..."
+echo "Checking for processes on ports 12001 and 12005..."
 
-# Check port 3000 (frontend)
-port_3000_pid=$(lsof -ti:3000 2>/dev/null)
-if [ -n "$port_3000_pid" ]; then
-    echo "Found process on port 3000 (PID: $port_3000_pid), terminating..."
-    echo "$port_3000_pid" | xargs -r kill -TERM 2>/dev/null
+# Check port 12001 (frontend)
+port_12001_pid=$(lsof -ti:12001 2>/dev/null)
+if [ -n "$port_12001_pid" ]; then
+    echo "Found process on port 12001 (PID: $port_12001_pid), terminating..."
+    echo "$port_12001_pid" | xargs -r kill -TERM 2>/dev/null
     sleep 1
-    echo "$port_3000_pid" | xargs -r kill -KILL 2>/dev/null
+    echo "$port_12001_pid" | xargs -r kill -KILL 2>/dev/null
 fi
 
-# Check port 5001 (backend)
-port_5001_pid=$(lsof -ti:5001 2>/dev/null)
-if [ -n "$port_5001_pid" ]; then
-    echo "Found process on port 5001 (PID: $port_5001_pid), terminating..."
-    echo "$port_5001_pid" | xargs -r kill -TERM 2>/dev/null
+# Check port 12005 (backend)
+port_12005_pid=$(lsof -ti:12005 2>/dev/null)
+if [ -n "$port_12005_pid" ]; then
+    echo "Found process on port 12005 (PID: $port_12005_pid), terminating..."
+    echo "$port_12005_pid" | xargs -r kill -TERM 2>/dev/null
     sleep 1
-    echo "$port_5001_pid" | xargs -r kill -KILL 2>/dev/null
+    echo "$port_12005_pid" | xargs -r kill -KILL 2>/dev/null
 fi
 
 echo ""

@@ -35,7 +35,7 @@ def get_available_models():
                 'model_name': server['openai_model'],
                 'server': server['server']
             })
-        
+
         return jsonify({'models': models})
         
     except Exception as e:
@@ -63,6 +63,7 @@ def create_session():
         
         research_goal = data['research_goal'].strip()
         model_shortname = data['model_shortname'].strip()
+        api_key = data.get('api_key', '').strip()
         
         if not research_goal:
             return jsonify({'error': 'research_goal cannot be empty'}), 400
@@ -73,7 +74,7 @@ def create_session():
         except Exception as e:
             return jsonify({'error': f'Invalid model: {str(e)}'}), 400
         
-        session = HypothesisService.create_session(research_goal, model_shortname)
+        session = HypothesisService.create_session(research_goal, model_shortname, api_key)
         
         return jsonify({
             'message': 'Session created successfully',

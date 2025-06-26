@@ -23,16 +23,7 @@ def load_model_config(model_shortname):
         # Look for the model by shortname
         for server in config['servers']:
             if server['shortname'] == model_shortname:
-                api_key = server['openai_api_key']
-                # Handle environment variable in api key if present
-                if api_key.startswith("${") and api_key.endswith("}"):
-                    env_var = api_key[2:-1]
-                    api_key = os.environ.get(env_var, "")
-                    if not api_key:
-                        raise ValueError(f"Environment variable {env_var} not set")
-                
                 return {
-                    'api_key': api_key,
                     'api_base': server['openai_api_base'],
                     'model_name': server['openai_model'],
                     'shortname': model_shortname
@@ -425,7 +416,7 @@ class HypothesisService:
     """Service class for managing hypotheses"""
     
     @staticmethod
-    def create_session(research_goal: str, model_shortname: str) -> Session:
+    def create_session(research_goal: str, model_shortname: str, api_key: str) -> Session:
         """Create a new research session"""
         try:
             # Load model configuration to validate
@@ -434,7 +425,8 @@ class HypothesisService:
             session = Session(
                 research_goal=research_goal,
                 model_name=model_config['model_name'],
-                model_shortname=model_shortname
+                model_shortname=model_shortname,
+                api_key=api_key
             )
             
             db.session.add(session)
@@ -453,6 +445,10 @@ class HypothesisService:
             raise ValueError(f"Session {session_id} not found")
         
         model_config = load_model_config(session.model_shortname)
+        
+        # Override the API key with the one stored on the session, if provided
+        if session.api_key:
+            model_config['api_key'] = session.api_key
         
         # Generate hypothesis using existing logic
         hypotheses = generate_hypotheses(
@@ -500,6 +496,10 @@ class HypothesisService:
         
         session = hypothesis.session
         model_config = load_model_config(session.model_shortname)
+        
+        # Override the API key with the one stored on the session, if provided
+        if session.api_key:
+            model_config['api_key'] = session.api_key
         
         # Convert hypothesis to dict for improvement function
         hypothesis_dict = {
@@ -563,6 +563,10 @@ class HypothesisService:
         existing_hypotheses = session.hypotheses
         
         model_config = load_model_config(session.model_shortname)
+        
+        # Override the API key with the one stored on the session, if provided
+        if session.api_key:
+            model_config['api_key'] = session.api_key
         
         # For now, just generate a new hypothesis (we'll add duplication avoidance later)
         hypotheses = generate_hypotheses(

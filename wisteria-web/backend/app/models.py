@@ -11,6 +11,7 @@ class Session(db.Model):
     research_goal = db.Column(db.Text, nullable=False)
     model_name = db.Column(db.String(100), nullable=False)
     model_shortname = db.Column(db.String(50), nullable=False)
+    api_key = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -26,7 +27,8 @@ class Session(db.Model):
             'model_shortname': self.model_shortname,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat(),
-            'hypothesis_count': len(self.hypotheses)
+            'hypothesis_count': len(self.hypotheses),
+            'api_key': self.api_key
         }
 
 class Hypothesis(db.Model):

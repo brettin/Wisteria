@@ -13,6 +13,7 @@ function App() {
   // Form states
   const [researchGoal, setResearchGoal] = useState('');
   const [selectedModel, setSelectedModel] = useState('');
+  const [apiKey, setApiKey] = useState('');
   const [feedback, setFeedback] = useState('');
 
   // Hypothesis navigation state
@@ -20,6 +21,7 @@ function App() {
   const [sessionHypotheses, setSessionHypotheses] = useState<Hypothesis[]>([]);
 
   useEffect(() => {
+    console.log('App useEffect triggered - loading models and sessions');
     loadModels();
     loadSessions();
   }, []);
@@ -34,7 +36,9 @@ function App() {
   };
 
   const loadSessions = async () => {
+    console.log('loadSessions called - about to call apiService.getSessions()');
     const result = await apiService.getSessions();
+    console.log('loadSessions result:', result);
     if (result.data) {
       setSessions(result.data);
     } else {
@@ -51,12 +55,13 @@ function App() {
     setLoading(true);
     setError(null);
 
-    const result = await apiService.createSession(researchGoal, selectedModel);
+    const result = await apiService.createSession(researchGoal, selectedModel, apiKey);
     if (result.data) {
       setCurrentSession(result.data);
       setSessions([result.data, ...sessions]);
       setResearchGoal('');
       setSelectedModel('');
+      setApiKey('');
     } else {
       setError(result.error || 'Failed to create session');
     }
@@ -240,6 +245,15 @@ function App() {
                         </option>
                       ))}
                     </select>
+                  </div>
+                  <div className="form-group" style={{ paddingRight: '17px' }}>
+                    <input
+                      type="text"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder="Enter your API key..."
+                      className="form-control"
+                    />
                   </div>
                   <button
                     onClick={createNewSession}
