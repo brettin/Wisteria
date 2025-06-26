@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { apiService } from './services/api';
 import { Session, Hypothesis, Model } from './types/hypothesis';
+import LoadingOverlay from './components/LoadingOverlay';
 
 function App() {
   const [models, setModels] = useState<Model[]>([]);
@@ -321,404 +322,350 @@ function App() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f9fafb' }}>
-      <div className="container">
-        <div className="header" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', justifyContent: 'center' }}>
-          {/* App Logo */}
-          <img src="/images/wisteria_logo.png" alt="Wisteria logo" style={{ height: '48px', width: 'auto' }} />
-          <h1 style={{ margin: 0 }}>Wisteria Research Hypothesis Generator</h1>
-        </div>
+    <>
+      {/* Header */}
+      <header className="header">
+        <img src="/images/wisteria_logo.png" alt="Wisteria logo" className="header-logo" />
+        <h1 className="header-title">Wisteria Research Hypothesis Generator</h1>
+      </header>
 
-        {error && (
-          <div className="alert alert-error">
-            {error}
+      {/* Error banner */}
+      {error && <div className="alert alert-error">{error}</div>}
+
+      {/* Main Grid */}
+      <div className="main-grid">
+        {/* Sidebar */}
+        <aside className="sidebar">
+          <div className="sidebar-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h2 style={{ margin: 0 }}>Sessions</h2>
+            <button
+              onClick={() => {
+                setShowCreateSessionPanel(true);
+                setCurrentSession(null);
+                setCurrentHypothesis(null);
+                setSessionHypotheses([]);
+                setHypothesisIndex(0);
+              }}
+              className="btn btn-primary btn-sm"
+            >
+              Start New Session
+            </button>
           </div>
-        )}
 
-        <div className="grid">
-          {/* Left Panel - Sessions */}
-          <div>
-            <div className="card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <h2 style={{ margin: 0 }}>Sessions</h2>
-                <button
-                  onClick={() => {
-                    setShowCreateSessionPanel(true);
-                    setCurrentSession(null);
-                    setCurrentHypothesis(null);
-                    setSessionHypotheses([]);
-                    setHypothesisIndex(0);
-                  }}
-                  className="btn btn-primary btn-sm"
-                >
-                  Start New Session
-                </button>
-              </div>
+          {sessions.map((session) => (
+            <div
+              key={session.id}
+              className={`session-card ${currentSession?.id === session.id ? 'active' : ''}`}
+              onClick={() => selectSession(session)}
+            >
+              <h4 className="session-card-title">{session.research_goal}</h4>
+              <p className="session-card-meta">{session.model_shortname}</p>
+              <p className="session-card-meta">{new Date(session.created_at).toLocaleDateString()}</p>
+              <p className="session-card-hypo-count">{session.hypothesis_count || 0} hypotheses</p>
 
-              {/* Session List */}
+              <button
+                className="delete-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deleteSession(session.id);
+                }}
+                title="Delete session"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </aside>
+
+        {/* Content */}
+        <main>
+          <div className="card">
+            {showCreateSessionPanel ? (
               <div>
-                {sessions.map((session) => (
-                  <div
-                    key={session.id}
-                    className={`session-item ${currentSession?.id === session.id ? 'active' : ''}`}
+                <h2>Create New Session</h2>
+                <div className="form-group">
+                  <label>Research Goal</label>
+                  <textarea
+                    value={researchGoal}
+                    onChange={(e) => setResearchGoal(e.target.value)}
+                    placeholder="Enter your research goal..."
+                    className="form-control"
+                    rows={4}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Model</label>
+                  <select
+                    value={selectedModel}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    className="form-control"
                   >
-                    <div 
-                      className="session-content"
-                      onClick={() => selectSession(session)}
-                    >
-                      <h4>{session.research_goal}</h4>
-                      <p>{session.model_shortname}</p>
-                      <p style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
-                        {new Date(session.created_at).toLocaleDateString()}
-                      </p>
-                      <p style={{ fontSize: '0.75rem', color: '#6b7280' }}>
-                        {session.hypothesis_count || 0} hypotheses
-                      </p>
-                    </div>
+                    <option value="">Select a model</option>
+                    {models.map((model) => (
+                      <option key={model.shortname} value={model.shortname}>
+                        {model.shortname} ({model.model_name})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>API Key</label>
+                  <input
+                    type="text"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="Enter your API key..."
+                    className="form-control"
+                  />
+                </div>
+                
+                {/* Additional Comments for first hypothesis */}
+                <div className="form-group">
+                  <label>Additional Comments (for first hypothesis)</label>
+                  <textarea
+                    value={feedback}
+                    onChange={(e) => setFeedback(e.target.value)}
+                    placeholder="Enter any comments or context for the first hypothesis..."
+                    className="form-control"
+                    rows={4}
+                  />
+                </div>
+                
+                {/* Attach Image functionality */}
+                <div className="form-group">
+                  <div className="d-flex justify-between align-center" style={{ marginBottom: '0.5rem' }}>
+                    <label>Attach Image (optional)</label>
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteSession(session.id);
-                      }}
-                      className="btn btn-danger btn-sm"
-                      style={{ 
-                        position: 'absolute', 
-                        top: '0.5rem', 
-                        right: '0.5rem',
-                        fontSize: '0.75rem',
-                        padding: '0.25rem 0.5rem'
-                      }}
-                      title="Delete session"
+                      onClick={handleImageAttachment}
+                      className="btn btn-outline btn-sm"
+                      type="button"
                     >
-                      ×
+                      📎 Attach Image
                     </button>
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Right Panel - Create Session or Hypothesis Viewer */}
-          <div>
-            <div className="card">
-              {showCreateSessionPanel ? (
-                <div>
-                  <h2>Create New Session</h2>
-                  <div className="form-group">
-                    <label>Research Goal</label>
-                    <textarea
-                      value={researchGoal}
-                      onChange={(e) => setResearchGoal(e.target.value)}
-                      placeholder="Enter your research goal..."
-                      className="form-control"
-                      style={{ height: '80px' }}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Model</label>
-                    <select
-                      value={selectedModel}
-                      onChange={(e) => setSelectedModel(e.target.value)}
-                      className="form-control"
-                    >
-                      <option value="">Select a model</option>
-                      {models.map((model) => (
-                        <option key={model.shortname} value={model.shortname}>
-                          {model.shortname} ({model.model_name})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>API Key</label>
-                    <input
-                      type="text"
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      placeholder="Enter your API key..."
-                      className="form-control"
-                    />
-                  </div>
                   
-                  {/* Additional Comments for first hypothesis */}
-                  <div className="form-group">
-                    <label>Additional Comments (for first hypothesis)</label>
-                    <textarea
-                      value={feedback}
-                      onChange={(e) => setFeedback(e.target.value)}
-                      placeholder="Enter any comments or context for the first hypothesis..."
-                      className="form-control"
-                      style={{ height: '80px' }}
-                    />
-                  </div>
-                  
-                  {/* Attach Image functionality */}
-                  <div className="form-group">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                      <label>Attach Image (optional)</label>
-                      <button
-                        onClick={handleImageAttachment}
-                        className="btn btn-outline-secondary btn-sm"
-                        type="button"
-                      >
-                        📎 Attach Image
-                      </button>
+                  {/* Image Preview */}
+                  {imagePreview && (
+                    <div className="attachment-preview">
+                      <div className="d-flex justify-between align-center" style={{ marginBottom: '0.5rem' }}>
+                        <h4 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 500 }}>Attached Image</h4>
+                        <button
+                          onClick={removeAttachedImage}
+                          className="btn btn-outline btn-sm"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <div className="text-center">
+                        <img src={imagePreview} alt="Attached" style={{ maxHeight: '200px', objectFit: 'contain' }} />
+                      </div>
+                      <p style={{ margin: 0, fontSize: '0.75rem', color: '#6b7280' }}>
+                        {attachedImage?.name} ({((attachedImage?.size || 0) / 1024 / 1024).toFixed(2)} MB)
+                      </p>
                     </div>
-                    
-                    {/* Image Preview */}
-                    {imagePreview && (
-                      <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '0.375rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                          <h4 style={{ margin: 0, fontSize: '0.875rem', fontWeight: '500' }}>Attached Image</h4>
-                          <button
-                            onClick={removeAttachedImage}
-                            className="btn btn-outline-danger btn-sm"
-                            style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'center' }}>
-                          <img
-                            src={imagePreview}
-                            alt="Attached"
-                            style={{
-                              maxWidth: '100%',
-                              maxHeight: '200px',
-                              objectFit: 'contain',
-                              border: '1px solid #e5e7eb',
-                              borderRadius: '0.375rem'
-                            }}
-                          />
-                        </div>
-                        <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.75rem', color: '#6b7280' }}>
-                          {attachedImage?.name} ({((attachedImage?.size || 0) / 1024 / 1024).toFixed(2)} MB)
-                        </p>
+                  )}
+                </div>
+                
+                <div className="d-flex" style={{ gap: '0.5rem', marginTop: '1.5rem' }}>
+                  <button
+                    onClick={createNewSession}
+                    disabled={loading || !researchGoal.trim() || !selectedModel}
+                    className="btn btn-primary"
+                  >
+                    {loading ? 'Creating Session & Generating Hypothesis...' : 'Create Session & Generate Hypothesis'}
+                  </button>
+                  <button
+                    onClick={() => setShowCreateSessionPanel(false)}
+                    className="btn btn-outline"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : currentSession ? (
+              <div>
+                <div className="hypothesis-header" style={{ marginBottom: '1.5rem' }}>
+                  <h2>Session: {currentSession.research_goal}</h2>
+                  <span className="text-gray-500">
+                    Model: {currentSession.model_shortname}
+                  </span>
+                </div>
+
+                {!currentHypothesis ? (
+                  <div className="content">
+                    No hypothesis generated yet. Click "Start New Session" to create one.
+                  </div>
+                ) : (
+                  <div>
+                    {/* Hypothesis Navigation */}
+                    {sessionHypotheses.length > 1 && (
+                      <div className="hypothesis-navigation" style={{ marginBottom: '1.5rem' }}>
+                        <button
+                          onClick={() => navigateHypothesis('prev')}
+                          disabled={hypothesisIndex === 0}
+                          className="btn btn-outline btn-sm"
+                        >
+                          ← Previous
+                        </button>
+                        <span style={{ fontSize: '0.875rem', color: '#6b7280', padding: '0 1rem' }}>
+                          Hypothesis {hypothesisIndex + 1} of {sessionHypotheses.length}
+                        </span>
+                        <button
+                          onClick={() => navigateHypothesis('next')}
+                          disabled={hypothesisIndex === sessionHypotheses.length - 1}
+                          className="btn btn-outline btn-sm"
+                        >
+                          Next →
+                        </button>
                       </div>
                     )}
-                  </div>
-                  
-                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem' }}>
-                    <button
-                      onClick={createNewSession}
-                      disabled={loading || !researchGoal.trim() || !selectedModel}
-                      className="btn btn-primary"
-                    >
-                      {loading ? 'Creating Session & Generating Hypothesis...' : 'Create Session & Generate Hypothesis'}
-                    </button>
-                    <button
-                      onClick={() => setShowCreateSessionPanel(false)}
-                      className="btn btn-outline-secondary"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : currentSession ? (
-                <div>
-                  <div className="hypothesis-header">
-                    <h2>Session: {currentSession.research_goal}</h2>
-                    <span className="text-gray-500">
-                      Model: {currentSession.model_shortname}
-                    </span>
-                  </div>
 
-                  {!currentHypothesis ? (
-                    <div className="text-center p-8">
-                      <p className="text-gray-500 mb-4">No hypothesis generated yet. Click "Start New Session" to create one.</p>
-                    </div>
-                  ) : (
-                    <div>
-                      {/* Hypothesis Navigation */}
-                      {sessionHypotheses.length > 1 && (
-                        <div className="hypothesis-navigation" style={{ 
-                          display: 'flex', 
-                          justifyContent: 'space-between', 
-                          alignItems: 'center',
-                          marginBottom: '1rem',
-                          padding: '0.5rem',
-                          backgroundColor: '#f8f9fa',
-                          borderRadius: '0.375rem'
-                        }}>
-                          <button
-                            onClick={() => navigateHypothesis('prev')}
-                            disabled={hypothesisIndex === 0}
-                            className="btn btn-outline-secondary btn-sm"
-                          >
-                            ← Previous
-                          </button>
-                          <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-                            Hypothesis {hypothesisIndex + 1} of {sessionHypotheses.length}
-                          </span>
-                          <button
-                            onClick={() => navigateHypothesis('next')}
-                            disabled={hypothesisIndex === sessionHypotheses.length - 1}
-                            className="btn btn-outline-secondary btn-sm"
-                          >
-                            Next →
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Hypothesis Display */}
-                      <div className="hypothesis">
-                        <div className="hypothesis-header">
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            <div>
-                              <h3 className="hypothesis-title">
-                                Hypothesis #{currentHypothesis.hypothesis_number} v{currentHypothesis.version}
-                              </h3>
-                              <p className="hypothesis-meta">
-                                Type: {currentHypothesis.hypothesis_type}
-                              </p>
-                            </div>
-                            <div style={{ display: 'flex', gap: '0.5rem' }}>
-                              <button
-                                onClick={downloadHypothesisPdf}
-                                disabled={loading}
-                                className="btn btn-outline-primary btn-sm"
-                                title="Download as PDF"
-                              >
-                                📄 PDF
-                              </button>
-                              <button
-                                onClick={() => {
-                                  if (feedbackRef.current) {
-                                    feedbackRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                    feedbackRef.current.focus();
-                                  }
-                                }}
-                                className="btn btn-outline-secondary btn-sm"
-                                title="Jump to feedback section"
-                              >
-                                💬 Provide Feedback
-                              </button>
-                            </div>
+                    {/* Hypothesis Display */}
+                    <div className="hypothesis">
+                      <div className="hypothesis-header">
+                        <div className="d-flex justify-between align-start" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <div>
+                            <h3 className="hypothesis-title">
+                              Hypothesis #{currentHypothesis.hypothesis_number} v{currentHypothesis.version}
+                            </h3>
+                            <p className="hypothesis-meta">
+                              Type: {currentHypothesis.hypothesis_type}
+                            </p>
+                          </div>
+                          <div className="d-flex" style={{ gap: '0.5rem' }}>
+                            <button
+                              onClick={downloadHypothesisPdf}
+                              disabled={loading}
+                              className="btn btn-outline btn-sm"
+                              title="Download as PDF"
+                            >
+                              📄 PDF
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (feedbackRef.current) {
+                                  feedbackRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                  feedbackRef.current.focus();
+                                }
+                              }}
+                              className="btn btn-outline btn-sm"
+                              title="Jump to feedback section"
+                            >
+                              💬 Provide Feedback
+                            </button>
                           </div>
                         </div>
-                        
-                        <div className="hypothesis-section">
-                          <h4>Title</h4>
-                          <p>{currentHypothesis.title}</p>
-                        </div>
+                      </div>
+                      
+                      <div className="hypothesis-section">
+                        <h4>Title</h4>
+                        <p>{currentHypothesis.title}</p>
+                      </div>
 
-                        <div className="hypothesis-section">
-                          <h4>Description</h4>
-                          <p>{currentHypothesis.description}</p>
-                        </div>
+                      <div className="hypothesis-section">
+                        <h4>Description</h4>
+                        <p>{currentHypothesis.description}</p>
+                      </div>
 
+                      <div className="hypothesis-section">
+                        <h4>Hallmarks Analysis</h4>
+                        <div className="hallmarks-grid">
+                          {Object.entries(currentHypothesis.hallmarks).map(([key, value]) => (
+                            <div key={key} className="hallmark-item">
+                              <h5>{key.replace('_', ' ')}</h5>
+                              <p className="hallmark-text">{value}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {currentHypothesis.references.length > 0 && (
                         <div className="hypothesis-section">
-                          <h4>Hallmarks Analysis</h4>
-                          <div className="hallmarks-grid">
-                            {Object.entries(currentHypothesis.hallmarks).map(([key, value]) => (
-                              <div key={key} className="hallmark-item">
-                                <h5>{key.replace('_', ' ')}:</h5>
-                                <p>{value}</p>
+                          <h4>References</h4>
+                          <div>
+                            {currentHypothesis.references.map((refItem, index) => (
+                              <div key={index} style={{ marginBottom: '0.5rem' }}>
+                                <p style={{ fontWeight: 500, fontSize: '0.875rem' }}>{refItem.citation}</p>
+                                <p className="session-card-meta">{refItem.annotation}</p>
                               </div>
                             ))}
                           </div>
                         </div>
+                      )}
+                    </div>
 
-                        {currentHypothesis.references.length > 0 && (
-                          <div className="hypothesis-section">
-                            <h4>References</h4>
-                            <div>
-                              {currentHypothesis.references.map((refItem, index) => (
-                                <div key={index} style={{ marginBottom: '0.5rem' }}>
-                                  <p style={{ fontWeight: '500', fontSize: '0.875rem' }}>{refItem.citation}</p>
-                                  <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>{refItem.annotation}</p>
-                                </div>
-                              ))}
+                    {/* Action Buttons */}
+                    <div className="border-t pt-4">
+                      <div className="mb-4">
+                        <div className="d-flex justify-between align-center" style={{ marginBottom: '0.5rem' }}>
+                          <h4>Provide Feedback</h4>
+                          <button
+                            onClick={handleImageAttachment}
+                            className="btn btn-outline btn-sm"
+                            title="Attach image"
+                          >
+                            📎 Attach Image
+                          </button>
+                        </div>
+                        <textarea
+                          ref={feedbackRef}
+                          value={feedback}
+                          onChange={(e) => setFeedback(e.target.value)}
+                          placeholder="Enter your feedback or comments..."
+                          className="form-control"
+                          rows={4}
+                        />
+                        
+                        {/* Image Preview */}
+                        {imagePreview && (
+                          <div className="attachment-preview" style={{ marginTop: '1rem' }}>
+                            <div className="d-flex justify-between align-center" style={{ marginBottom: '0.5rem' }}>
+                              <h5 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 500 }}>Attached Image</h5>
+                              <button
+                                onClick={removeAttachedImage}
+                                className="btn btn-outline btn-sm"
+                              >
+                                Remove
+                              </button>
                             </div>
+                            <div className="text-center">
+                              <img src={imagePreview} alt="Attached" style={{ maxHeight: '200px', objectFit: 'contain' }} />
+                            </div>
+                            <p style={{ margin: 0, fontSize: '0.75rem', color: '#6b7280' }}>
+                              {attachedImage?.name} ({((attachedImage?.size || 0) / 1024 / 1024).toFixed(2)} MB)
+                            </p>
                           </div>
                         )}
                       </div>
-
-                      {/* Action Buttons */}
-                      <div className="border-t pt-4">
-                        <div className="mb-4">
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                            <h4>Provide Feedback</h4>
-                            <button
-                              onClick={handleImageAttachment}
-                              className="btn btn-outline-secondary btn-sm"
-                              title="Attach image"
-                            >
-                              📎 Attach Image
-                            </button>
-                          </div>
-                          <textarea
-                            ref={feedbackRef}
-                            value={feedback}
-                            onChange={(e) => setFeedback(e.target.value)}
-                            placeholder="Enter your feedback or comments..."
-                            className="form-control"
-                            style={{ height: '80px' }}
-                          />
-                          
-                          {/* Image Preview */}
-                          {imagePreview && (
-                            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '0.375rem' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                                <h5 style={{ margin: 0, fontSize: '0.875rem', fontWeight: '500' }}>Attached Image</h5>
-                                <button
-                                  onClick={removeAttachedImage}
-                                  className="btn btn-outline-danger btn-sm"
-                                  style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                              <div style={{ display: 'flex', justifyContent: 'center' }}>
-                                <img
-                                  src={imagePreview}
-                                  alt="Attached"
-                                  style={{
-                                    maxWidth: '100%',
-                                    maxHeight: '200px',
-                                    objectFit: 'contain',
-                                    border: '1px solid #e5e7eb',
-                                    borderRadius: '0.375rem'
-                                  }}
-                                />
-                              </div>
-                              <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.75rem', color: '#6b7280' }}>
-                                {attachedImage?.name} ({((attachedImage?.size || 0) / 1024 / 1024).toFixed(2)} MB)
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                        
-                        <div className="flex space-x-4">
-                          <button
-                            onClick={improveHypothesis}
-                            disabled={loading || !feedback.trim()}
-                            className="btn btn-warning"
-                          >
-                            {loading ? 'Improving...' : 'Improve Hypothesis'}
-                          </button>
-                          <button
-                            onClick={generateNewHypothesis}
-                            disabled={loading}
-                            className="btn btn-danger"
-                          >
-                            {loading ? 'Generating...' : 'Generate New Hypothesis'}
-                          </button>
-                        </div>
+                      
+                      <div className="d-flex" style={{ gap: '0.5rem' }}>
+                        <button
+                          onClick={improveHypothesis}
+                          disabled={loading || !feedback.trim()}
+                          className="btn btn-warning"
+                        >
+                          {loading ? 'Improving...' : 'Improve Hypothesis'}
+                        </button>
+                        <button
+                          onClick={generateNewHypothesis}
+                          disabled={loading}
+                          className="btn btn-danger"
+                        >
+                          {loading ? 'Generating...' : 'Generate New Hypothesis'}
+                        </button>
                       </div>
                     </div>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center p-8 text-gray-500">
-                  Select a session to view hypotheses
-                </div>
-              )}
-            </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="content">Select a session to view hypotheses</div>
+            )}
           </div>
-        </div>
+        </main>
       </div>
-    </div>
+      <LoadingOverlay visible={loading} />
+    </>
   );
 }
 
