@@ -13,6 +13,25 @@ const api = axios.create({
 });
 
 export const apiService = {
+  // Authentication
+  login: async (username: string, password: string): Promise<ApiResponse<{ user: any }>> => {
+    try {
+      const response = await api.post('/auth/login', { username, password });
+      return { data: { user: response.data.user }, message: response.data.message };
+    } catch (error: any) {
+      return { error: error.response?.data?.error || 'Login failed' };
+    }
+  },
+
+  createUser: async (username: string, password: string): Promise<ApiResponse<{ user: any }>> => {
+    try {
+      const response = await api.post('/auth/create-user', { username, password });
+      return { data: { user: response.data.user }, message: response.data.message };
+    } catch (error: any) {
+      return { error: error.response?.data?.error || 'User creation failed' };
+    }
+  },
+
   // Health check
   healthCheck: async (): Promise<ApiResponse<{ status: string; message: string }>> => {
     try {

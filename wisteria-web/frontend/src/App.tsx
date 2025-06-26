@@ -2,8 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { apiService } from './services/api';
 import { Session, Hypothesis, Model } from './types/hypothesis';
 import LoadingOverlay from './components/LoadingOverlay';
+import Login from './components/Login';
 
 function App() {
+  // Authentication state
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  
   const [models, setModels] = useState<Model[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
@@ -31,10 +35,33 @@ function App() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('App useEffect triggered - loading models and sessions');
-    loadModels();
-    loadSessions();
-  }, []);
+    if (isAuthenticated) {
+      console.log('App useEffect triggered - loading models and sessions');
+      loadModels();
+      loadSessions();
+    }
+  }, [isAuthenticated]);
+
+  const handleLogin = () => {
+    setIsAuthenticated(true);
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    // Reset all state when logging out
+    setCurrentSession(null);
+    setCurrentHypothesis(null);
+    setSessionHypotheses([]);
+    setSessions([]);
+    setModels([]);
+    setError(null);
+    setFeedback('');
+    setResearchGoal('');
+    setSelectedModel('');
+    setApiKey('');
+    removeAttachedImage();
+    setShowCreateSessionPanel(false);
+  };
 
   const loadModels = async () => {
     const result = await apiService.getModels();
@@ -321,12 +348,24 @@ function App() {
     setImagePreview(null);
   };
 
+  // Show login page if not authenticated
+  if (!isAuthenticated) {
+    return <Login onLogin={handleLogin} />;
+  }
+
   return (
     <>
       {/* Header */}
       <header className="header">
         <img src="/images/wisteria_logo.png" alt="Wisteria logo" className="header-logo" />
         <h1 className="header-title">Wisteria Research Hypothesis Generator</h1>
+        <button
+          onClick={handleLogout}
+          className="btn btn-outline btn-sm"
+          style={{ marginLeft: 'auto' }}
+        >
+          Logout
+        </button>
       </header>
 
       {/* Error banner */}

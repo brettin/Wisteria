@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, send_file
-from app.models import Session, Hypothesis, db
+from app.models import Session, Hypothesis, User, db
 from app.services import HypothesisService, load_model_config
 import yaml
 import os
@@ -18,6 +18,77 @@ except ImportError:
     PDF_AVAILABLE = False
 
 api = Blueprint('api', __name__)
+
+@api.route('/auth/login', methods=['POST'])
+def login():
+    """Authenticate user login"""
+    try:
+        data = request.get_json()
+        
+        if not data or 'username' not in data or 'password' not in data:
+            return jsonify({'error': 'Username and password are required'}), 400
+        
+        username = data['username'].strip()
+        password = data['password']
+        
+        if not username or not password:
+            return jsonify({'error': 'Username and password cannot be empty'}), 400
+        
+        # Find user by username
+        user = User.query.filter_by(username=username).first()
+        
+        if not user or not user.check_password(password):
+            return jsonify({'error': 'Invalid username or password'}), 401
+        
+        return jsonify({
+            'message': 'Login successful',
+            'user': user.to_dict()
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/auth/create-user', methods=['POST'])
+def create_user():
+    """Create a new user account"""
+    try:
+        data = request.get_json()
+        
+        if not data or 'username' not in data or 'password' not in data:
+            return jsonify({'error': 'Username and password are required'}), 400
+        
+        username = data['username'].strip()
+        password = data['password']
+        
+        if not username or not password:
+            return jsonify({'error': 'Username and password cannot be empty'}), 400
+        
+        if len(username) < 3:
+            return jsonify({'error': 'Username must be at least 3 characters long'}), 400
+        
+        if len(password) < 6:
+            return jsonify({'error': 'Password must be at least 6 characters long'}), 400
+        
+        # Check if username already exists
+        existing_user = User.query.filter_by(username=username).first()
+        if existing_user:
+            return jsonify({'error': 'Username already exists'}), 409
+        
+        # Create new user
+        user = User(username=username)
+        user.set_password(password)
+        
+        db.session.add(user)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'User created successfully',
+            'user': user.to_dict()
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 @api.route('/models', methods=['GET'])
 def get_available_models():
