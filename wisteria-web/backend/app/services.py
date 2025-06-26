@@ -8,6 +8,7 @@ import backoff
 from datetime import datetime
 from app.models import Session, Hypothesis, db
 from app import socketio
+from typing import Optional
 
 def load_model_config(model_shortname):
     """
@@ -54,7 +55,7 @@ def clean_json_string(text):
     giveup=lambda e: "Invalid authentication" in str(e),
     max_time=300
 )
-def generate_hypotheses(research_goal, config, num_hypotheses=1, session_id=None):
+def generate_hypotheses(research_goal, config, num_hypotheses=1, session_id=None, image_b64: Optional[str] = None, additional_comments: Optional[str] = None):
     """
     Generate scientific hypotheses based on a research goal.
     Returns a list of hypothesis objects.
@@ -121,6 +122,11 @@ Please format your response as a JSON array where each hypothesis is an object w
 }}
 
 Ensure each hypothesis is substantively different from the others and explores unique aspects or approaches to the research goal.
+
+
+ADDITIONAL COMMENTS: 
+{additional_comments}
+
 """
     
     try:
@@ -165,13 +171,26 @@ Ensure each hypothesis is substantively different from the others and explores u
         # Check if we need to skip temperature (for reasoning models like o3 and o4mini)
         skip_temperature = any(name in model_name.lower() for name in ["o3", "o4-mini", "o4mini"])
         
-        # Prepare parameters
-        params = {
-            "model": model_name,
-            "messages": [
+        # Prepare messages with optional image content
+        if image_b64:
+            user_content = [
+                {"type": "text", "text": user_message},
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_b64}"}},
+            ]
+            system_message += "\n\nAnalyze the image as a scientist would, and use it to inform your hypothesis generation."
+            messages = [
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_content},
+            ]
+        else:
+            messages = [
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_message},
             ]
+        
+        params = {
+            "model": model_name,
+            "messages": messages,
         }
         
         # Add temperature only for models that support it
@@ -249,7 +268,7 @@ Ensure each hypothesis is substantively different from the others and explores u
     giveup=lambda e: "Invalid authentication" in str(e),
     max_time=300
 )
-def improve_hypothesis(research_goal, current_hypothesis, user_feedback, config, session_id=None):
+def improve_hypothesis(research_goal, current_hypothesis, user_feedback, config, session_id=None, image_b64: Optional[str] = None):
     """
     Improve a hypothesis based on user feedback.
     """
@@ -341,13 +360,26 @@ Please format your response as a JSON object with the following structure:
         # Check if we need to skip temperature (for reasoning models like o3 and o4mini)
         skip_temperature = any(name in model_name.lower() for name in ["o3", "o4-mini", "o4mini"])
         
-        # Prepare parameters
-        params = {
-            "model": model_name,
-            "messages": [
+        # Prepare messages with optional image content
+        if image_b64:
+            user_content = [
+                {"type": "text", "text": user_message},
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_b64}"}},
+            ]
+            system_message += "\n\nAnalyze the provided image as a scientist would, and use it to inform your hypothesis improvement."
+            messages = [
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_content},
+            ]
+        else:
+            messages = [
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_message},
             ]
+        
+        params = {
+            "model": model_name,
+            "messages": messages,
         }
         
         # Add temperature only for models that support it
@@ -438,7 +470,7 @@ class HypothesisService:
             raise e
     
     @staticmethod
-    def generate_initial_hypothesis(session_id: str) -> Hypothesis:
+    def generate_initial_hypothesis(session_id: str, image_b64: Optional[str] = None, initial_comments: Optional[str] = None) -> Hypothesis:
         """Generate the first hypothesis for a session"""
         session = Session.query.get(session_id)
         if not session:
@@ -455,7 +487,9 @@ class HypothesisService:
             session.research_goal, 
             model_config, 
             num_hypotheses=1,
-            session_id=session_id
+            session_id=session_id,
+            image_b64=image_b64,
+            additional_comments=initial_comments
         )
         
         if not hypotheses or hypotheses[0].get("error"):
@@ -488,7 +522,7 @@ class HypothesisService:
         return hypothesis
     
     @staticmethod
-    def improve_hypothesis(hypothesis_id: str, feedback: str) -> Hypothesis:
+    def improve_hypothesis(hypothesis_id: str, feedback: str, image_b64: Optional[str] = None) -> Hypothesis:
         """Improve an existing hypothesis based on feedback"""
         hypothesis = Hypothesis.query.get(hypothesis_id)
         if not hypothesis:
@@ -515,7 +549,8 @@ class HypothesisService:
             hypothesis_dict,
             feedback,
             model_config,
-            session_id=session.id
+            session_id=session.id,
+            image_b64=image_b64
         )
         
         if improved_data.get("error"):
@@ -553,7 +588,7 @@ class HypothesisService:
         return improved_hypothesis
     
     @staticmethod
-    def generate_new_hypothesis(session_id: str) -> Hypothesis:
+    def generate_new_hypothesis(session_id: str, comments: Optional[str] = None, image_b64: Optional[str] = None) -> Hypothesis:
         """Generate a new alternative hypothesis"""
         session = Session.query.get(session_id)
         if not session:
@@ -573,7 +608,9 @@ class HypothesisService:
             session.research_goal, 
             model_config, 
             num_hypotheses=1,
-            session_id=session_id
+            session_id=session_id,
+            image_b64=image_b64,
+            additional_comments=comments
         )
         
         if not hypotheses or hypotheses[0].get("error"):

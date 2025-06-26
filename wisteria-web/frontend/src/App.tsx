@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { apiService } from './services/api';
 import { Session, Hypothesis, Model } from './types/hypothesis';
 
@@ -15,10 +15,16 @@ function App() {
   const [selectedModel, setSelectedModel] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [feedback, setFeedback] = useState('');
+  // Ref to feedback textarea so we can scroll/focus it from header button
+  const feedbackRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Hypothesis navigation state
   const [hypothesisIndex, setHypothesisIndex] = useState(0);
   const [sessionHypotheses, setSessionHypotheses] = useState<Hypothesis[]>([]);
+
+  // Image attachment state
+  const [attachedImage, setAttachedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   useEffect(() => {
     console.log('App useEffect triggered - loading models and sessions');
@@ -59,6 +65,10 @@ function App() {
     if (result.data) {
       setCurrentSession(result.data);
       setSessions([result.data, ...sessions]);
+      // Clear hypothesis state for new session
+      setCurrentHypothesis(null);
+      setSessionHypotheses([]);
+      setHypothesisIndex(0);
       setResearchGoal('');
       setSelectedModel('');
       setApiKey('');
@@ -68,20 +78,41 @@ function App() {
     setLoading(false);
   };
 
+  // Helper function to update both current session and sessions array
+  const updateSessionData = (updatedSession: Session) => {
+    setCurrentSession(updatedSession);
+    setSessions(sessions.map(session => 
+      session.id === updatedSession.id ? updatedSession : session
+    ));
+  };
+
   const generateHypothesis = async () => {
     if (!currentSession) return;
 
     setLoading(true);
     setError(null);
 
-    const result = await apiService.generateHypothesis(currentSession.id);
+    const commentsToSend = feedback.trim() || undefined;
+    const result = await apiService.generateHypothesis(currentSession.id, commentsToSend, attachedImage || undefined);
     if (result.data) {
       setCurrentHypothesis(result.data);
+      setFeedback('');
+      // Initialize hypothesis list with the first generated hypothesis so that
+      // navigation and feedback functionality work immediately.
+      setSessionHypotheses([result.data]);
+      setHypothesisIndex(0);
       // Refresh session to get updated hypothesis count
       const sessionResult = await apiService.getSession(currentSession.id);
       if (sessionResult.data) {
-        setCurrentSession(sessionResult.data);
+        updateSessionData(sessionResult.data);
+        // Keep local hypothesis list in sync with backend
+        if (sessionResult.data.hypotheses && sessionResult.data.hypotheses.length > 0) {
+          setSessionHypotheses(sessionResult.data.hypotheses);
+          setHypothesisIndex(sessionResult.data.hypotheses.length - 1);
+        }
       }
+      // Clear attached image after successful generation
+      removeAttachedImage();
     } else {
       setError(result.error || 'Failed to generate hypothesis');
     }
@@ -94,15 +125,22 @@ function App() {
     setLoading(true);
     setError(null);
 
-    const result = await apiService.improveHypothesis(currentSession.id, currentHypothesis.id, feedback);
+    const result = await apiService.improveHypothesis(currentSession.id, currentHypothesis.id, feedback, attachedImage || undefined);
     if (result.data) {
       setCurrentHypothesis(result.data);
       setFeedback('');
       // Refresh session
       const sessionResult = await apiService.getSession(currentSession.id);
       if (sessionResult.data) {
-        setCurrentSession(sessionResult.data);
+        updateSessionData(sessionResult.data);
+        // Update local hypothesis list so navigation includes the improved version
+        if (sessionResult.data.hypotheses && sessionResult.data.hypotheses.length > 0) {
+          setSessionHypotheses(sessionResult.data.hypotheses);
+          setHypothesisIndex(sessionResult.data.hypotheses.length - 1);
+        }
       }
+      // Clear attached image after successful generation
+      removeAttachedImage();
     } else {
       setError(result.error || 'Failed to improve hypothesis');
     }
@@ -115,14 +153,23 @@ function App() {
     setLoading(true);
     setError(null);
 
-    const result = await apiService.generateNewHypothesis(currentSession.id);
+    const commentsToSend = feedback.trim() || undefined;
+    const result = await apiService.generateNewHypothesis(currentSession.id, commentsToSend, attachedImage || undefined);
     if (result.data) {
       setCurrentHypothesis(result.data);
+      setFeedback('');
       // Refresh session
       const sessionResult = await apiService.getSession(currentSession.id);
       if (sessionResult.data) {
-        setCurrentSession(sessionResult.data);
+        updateSessionData(sessionResult.data);
+        // Sync local hypothesis list for navigation
+        if (sessionResult.data.hypotheses && sessionResult.data.hypotheses.length > 0) {
+          setSessionHypotheses(sessionResult.data.hypotheses);
+          setHypothesisIndex(sessionResult.data.hypotheses.length - 1);
+        }
       }
+      // Clear attached image after successful generation
+      removeAttachedImage();
     } else {
       setError(result.error || 'Failed to generate new hypothesis');
     }
@@ -198,6 +245,31 @@ function App() {
       setHypothesisIndex(newIndex);
       setCurrentHypothesis(sessionHypotheses[newIndex]);
     }
+  };
+
+  const handleImageAttachment = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (event) => {
+      const file = (event.target as HTMLInputElement).files?.[0];
+      if (file) {
+        setAttachedImage(file);
+        
+        // Create preview URL
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setImagePreview(e.target?.result as string);
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
+  };
+
+  const removeAttachedImage = () => {
+    setAttachedImage(null);
+    setImagePreview(null);
   };
 
   return (
@@ -323,13 +395,66 @@ function App() {
                   {!currentHypothesis ? (
                     <div className="text-center p-8">
                       <p className="text-gray-500 mb-4">No hypothesis generated yet</p>
-                      <button
-                        onClick={generateHypothesis}
-                        disabled={loading}
-                        className="btn btn-success"
-                      >
-                        {loading ? 'Generating...' : 'Generate First Hypothesis'}
-                      </button>
+                      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                        <button
+                          onClick={generateHypothesis}
+                          disabled={loading}
+                          className="btn btn-success"
+                        >
+                          {loading ? 'Generating...' : 'Generate First Hypothesis'}
+                        </button>
+                        <button
+                          onClick={handleImageAttachment}
+                          className="btn btn-outline-secondary"
+                          title="Attach image"
+                        >
+                          📎
+                        </button>
+                      </div>
+                      
+                      {/* Include Comments */}
+                      <div className="mt-4" style={{ maxWidth: '500px', margin: '0 auto' }}>
+                        <h4>Include Comments</h4>
+                        <textarea
+                          value={feedback}
+                          onChange={(e) => setFeedback(e.target.value)}
+                          placeholder="Enter any comments or context for the first hypothesis..."
+                          className="form-control"
+                          style={{ height: '80px' }}
+                        />
+                      </div>
+                      
+                      {/* Image Preview */}
+                      {imagePreview && (
+                        <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '0.375rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                            <h4 style={{ margin: 0, fontSize: '0.875rem', fontWeight: '500' }}>Attached Image</h4>
+                            <button
+                              onClick={removeAttachedImage}
+                              className="btn btn-outline-danger btn-sm"
+                              style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'center' }}>
+                            <img
+                              src={imagePreview}
+                              alt="Attached"
+                              style={{
+                                maxWidth: '100%',
+                                maxHeight: '200px',
+                                objectFit: 'contain',
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '0.375rem'
+                              }}
+                            />
+                          </div>
+                          <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.75rem', color: '#6b7280' }}>
+                            {attachedImage?.name} ({((attachedImage?.size || 0) / 1024 / 1024).toFixed(2)} MB)
+                          </p>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div>
@@ -367,7 +492,7 @@ function App() {
                       {/* Hypothesis Display */}
                       <div className="hypothesis">
                         <div className="hypothesis-header">
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', flexWrap: 'wrap' }}>
                             <div>
                               <h3 className="hypothesis-title">
                                 Hypothesis #{currentHypothesis.hypothesis_number} v{currentHypothesis.version}
@@ -376,14 +501,28 @@ function App() {
                                 Type: {currentHypothesis.hypothesis_type}
                               </p>
                             </div>
-                            <button
-                              onClick={downloadHypothesisPdf}
-                              disabled={loading}
-                              className="btn btn-outline-primary btn-sm"
-                              title="Download as PDF"
-                            >
-                              📄 PDF
-                            </button>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                              <button
+                                onClick={downloadHypothesisPdf}
+                                disabled={loading}
+                                className="btn btn-outline-primary btn-sm"
+                                title="Download as PDF"
+                              >
+                                📄 PDF
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (feedbackRef.current) {
+                                    feedbackRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    feedbackRef.current.focus();
+                                  }
+                                }}
+                                className="btn btn-outline-secondary btn-sm"
+                                title="Jump to feedback section"
+                              >
+                                💬 Provide Feedback
+                              </button>
+                            </div>
                           </div>
                         </div>
                         
@@ -413,10 +552,10 @@ function App() {
                           <div className="hypothesis-section">
                             <h4>References</h4>
                             <div>
-                              {currentHypothesis.references.map((ref, index) => (
+                              {currentHypothesis.references.map((refItem, index) => (
                                 <div key={index} style={{ marginBottom: '0.5rem' }}>
-                                  <p style={{ fontWeight: '500', fontSize: '0.875rem' }}>{ref.citation}</p>
-                                  <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>{ref.annotation}</p>
+                                  <p style={{ fontWeight: '500', fontSize: '0.875rem' }}>{refItem.citation}</p>
+                                  <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>{refItem.annotation}</p>
                                 </div>
                               ))}
                             </div>
@@ -427,14 +566,56 @@ function App() {
                       {/* Action Buttons */}
                       <div className="border-t pt-4">
                         <div className="mb-4">
-                          <h4>Provide Feedback</h4>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                            <h4>Provide Feedback</h4>
+                            <button
+                              onClick={handleImageAttachment}
+                              className="btn btn-outline-secondary btn-sm"
+                              title="Attach image"
+                            >
+                              📎 Attach Image
+                            </button>
+                          </div>
                           <textarea
+                            ref={feedbackRef}
                             value={feedback}
                             onChange={(e) => setFeedback(e.target.value)}
-                            placeholder="Enter your feedback to improve this hypothesis..."
+                            placeholder="Enter your feedback or comments..."
                             className="form-control"
                             style={{ height: '80px' }}
                           />
+                          
+                          {/* Image Preview */}
+                          {imagePreview && (
+                            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '0.375rem' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                <h5 style={{ margin: 0, fontSize: '0.875rem', fontWeight: '500' }}>Attached Image</h5>
+                                <button
+                                  onClick={removeAttachedImage}
+                                  className="btn btn-outline-danger btn-sm"
+                                  style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                <img
+                                  src={imagePreview}
+                                  alt="Attached"
+                                  style={{
+                                    maxWidth: '100%',
+                                    maxHeight: '200px',
+                                    objectFit: 'contain',
+                                    border: '1px solid #e5e7eb',
+                                    borderRadius: '0.375rem'
+                                  }}
+                                />
+                              </div>
+                              <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.75rem', color: '#6b7280' }}>
+                                {attachedImage?.name} ({((attachedImage?.size || 0) / 1024 / 1024).toFixed(2)} MB)
+                              </p>
+                            </div>
+                          )}
                         </div>
                         
                         <div className="flex space-x-4">

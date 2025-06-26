@@ -79,9 +79,25 @@ export const apiService = {
   },
 
   // Generate initial hypothesis
-  generateHypothesis: async (sessionId: string): Promise<ApiResponse<Hypothesis>> => {
+  generateHypothesis: async (sessionId: string, comments?: string, image?: File): Promise<ApiResponse<Hypothesis>> => {
     try {
-      const response = await api.post(`/sessions/${sessionId}/hypotheses`);
+      let response;
+      if (image) {
+        const formData = new FormData();
+        formData.append('image', image);
+        if (comments) {
+          formData.append('comments', comments);
+        }
+        response = await api.post(`/sessions/${sessionId}/hypotheses`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      } else {
+        const payload: any = {};
+        if (comments) {
+          payload.comments = comments;
+        }
+        response = await api.post(`/sessions/${sessionId}/hypotheses`, payload);
+      }
       return { data: response.data.hypothesis, message: response.data.message };
     } catch (error: any) {
       return { error: error.response?.data?.error || 'Failed to generate hypothesis' };
@@ -89,11 +105,21 @@ export const apiService = {
   },
 
   // Improve hypothesis
-  improveHypothesis: async (sessionId: string, hypothesisId: string, feedback: string): Promise<ApiResponse<Hypothesis>> => {
+  improveHypothesis: async (sessionId: string, hypothesisId: string, feedback: string, image?: File): Promise<ApiResponse<Hypothesis>> => {
     try {
-      const response = await api.post(`/sessions/${sessionId}/hypotheses/${hypothesisId}/improve`, {
-        feedback,
-      });
+      let response;
+      if (image) {
+        const formData = new FormData();
+        formData.append('feedback', feedback);
+        formData.append('image', image);
+        response = await api.post(`/sessions/${sessionId}/hypotheses/${hypothesisId}/improve`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      } else {
+        response = await api.post(`/sessions/${sessionId}/hypotheses/${hypothesisId}/improve`, {
+          feedback,
+        });
+      }
       return { data: response.data.hypothesis, message: response.data.message };
     } catch (error: any) {
       return { error: error.response?.data?.error || 'Failed to improve hypothesis' };
@@ -101,9 +127,23 @@ export const apiService = {
   },
 
   // Generate new hypothesis
-  generateNewHypothesis: async (sessionId: string): Promise<ApiResponse<Hypothesis>> => {
+  generateNewHypothesis: async (sessionId: string, comments?: string, image?: File): Promise<ApiResponse<Hypothesis>> => {
     try {
-      const response = await api.post(`/sessions/${sessionId}/hypotheses/new`);
+      let response;
+      if (image || comments) {
+        const formData = new FormData();
+        if (comments) {
+          formData.append('comments', comments);
+        }
+        if (image) {
+          formData.append('image', image);
+        }
+        response = await api.post(`/sessions/${sessionId}/hypotheses/new`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      } else {
+        response = await api.post(`/sessions/${sessionId}/hypotheses/new`);
+      }
       return { data: response.data.hypothesis, message: response.data.message };
     } catch (error: any) {
       return { error: error.response?.data?.error || 'Failed to generate new hypothesis' };
