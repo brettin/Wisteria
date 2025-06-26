@@ -91,4 +91,3 @@ hypotheses_*.json
 *.swo
 
 pm2_output/*
-*/backend/instance/*
