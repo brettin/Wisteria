@@ -323,8 +323,10 @@ function App() {
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f9fafb' }}>
       <div className="container">
-        <div className="header">
-          <h1>Wisteria Research Hypothesis Generator</h1>
+        <div className="header" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', justifyContent: 'center' }}>
+          {/* App Logo */}
+          <img src="/images/wisteria_logo.png" alt="Wisteria logo" style={{ height: '48px', width: 'auto' }} />
+          <h1 style={{ margin: 0 }}>Wisteria Research Hypothesis Generator</h1>
         </div>
 
         {error && (
