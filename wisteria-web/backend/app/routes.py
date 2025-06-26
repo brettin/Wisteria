@@ -117,8 +117,24 @@ def generate_hypothesis(session_id):
         existing_hypotheses = Hypothesis.query.filter_by(session_id=session_id).first()
         if existing_hypotheses:
             return jsonify({'error': 'Session already has hypotheses. Use /improve or /new endpoint.'}), 400
-        
-        hypothesis = HypothesisService.generate_initial_hypothesis(session_id)
+
+        # Handle optional image attachment and comments
+        image_b64 = None
+        comments = None
+
+        # Multipart: image and/or comments
+        if request.content_type and request.content_type.startswith('multipart'):
+            image_file = request.files.get('image')
+            if image_file:
+                import base64
+                image_b64 = base64.b64encode(image_file.read()).decode('utf-8')
+            # Comments can come as a regular field in the form
+            comments = request.form.get('comments', '').strip() or None
+        else:
+            # JSON payload may include comments
+            data_json = request.get_json(silent=True) or {}
+            comments = (data_json.get('comments') or '').strip() or None
+        hypothesis = HypothesisService.generate_initial_hypothesis(session_id, image_b64=image_b64, initial_comments=comments)
         
         return jsonify({
             'message': 'Hypothesis generated successfully',
@@ -132,12 +148,25 @@ def generate_hypothesis(session_id):
 def improve_hypothesis_endpoint(session_id, hypothesis_id):
     """Improve an existing hypothesis based on feedback"""
     try:
-        data = request.get_json()
+        # Handle optional image attachment and feedback
+        image_b64 = None
+        feedback = None
+
+        # Multipart: image and/or feedback
+        if request.content_type and request.content_type.startswith('multipart'):
+            image_file = request.files.get('image')
+            if image_file:
+                import base64
+                image_b64 = base64.b64encode(image_file.read()).decode('utf-8')
+            # Feedback can come as a regular field in the form
+            feedback = request.form.get('feedback', '').strip()
+        else:
+            # JSON payload with feedback
+            data = request.get_json()
+            if not data or 'feedback' not in data:
+                return jsonify({'error': 'feedback is required'}), 400
+            feedback = data['feedback'].strip()
         
-        if not data or 'feedback' not in data:
-            return jsonify({'error': 'feedback is required'}), 400
-        
-        feedback = data['feedback'].strip()
         if not feedback:
             return jsonify({'error': 'feedback cannot be empty'}), 400
         
@@ -150,7 +179,7 @@ def improve_hypothesis_endpoint(session_id, hypothesis_id):
         if not hypothesis or hypothesis.session_id != session_id:
             return jsonify({'error': 'Hypothesis not found'}), 404
         
-        improved_hypothesis = HypothesisService.improve_hypothesis(hypothesis_id, feedback)
+        improved_hypothesis = HypothesisService.improve_hypothesis(hypothesis_id, feedback, image_b64)
         
         return jsonify({
             'message': 'Hypothesis improved successfully',
@@ -168,7 +197,24 @@ def generate_new_hypothesis_endpoint(session_id):
         if not session:
             return jsonify({'error': 'Session not found'}), 404
         
-        hypothesis = HypothesisService.generate_new_hypothesis(session_id)
+        # Handle optional image attachment and comments
+        image_b64 = None
+        comments = None
+
+        # Multipart: image and/or comments
+        if request.content_type and request.content_type.startswith('multipart'):
+            image_file = request.files.get('image')
+            if image_file:
+                import base64
+                image_b64 = base64.b64encode(image_file.read()).decode('utf-8')
+            # Comments can come as a regular field in the form
+            comments = request.form.get('comments', '').strip() or None
+        else:
+            # JSON payload may include comments
+            data_json = request.get_json(silent=True) or {}
+            comments = (data_json.get('comments') or '').strip() or None
+        
+        hypothesis = HypothesisService.generate_new_hypothesis(session_id, comments, image_b64)
         
         return jsonify({
             'message': 'New hypothesis generated successfully',
