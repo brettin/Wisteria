@@ -2,13 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { apiService } from './services/api';
 import { Session, Hypothesis, Model } from './types/hypothesis';
 import LoadingOverlay from './components/LoadingOverlay';
-import Login from './components/Login';
 
 function App() {
-  // Authentication state
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  // Store logged in user information
-  const [currentUser, setCurrentUser] = useState<{ id: string; username: string } | null>(null);
+  // Authentication removed – application now runs without user sessions
   
   const [models, setModels] = useState<Model[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -37,67 +33,10 @@ function App() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      console.log('App useEffect triggered - loading models and sessions');
-      loadModels();
-      if (currentUser) {
-        loadSessions();
-      }
-    }
-  }, [isAuthenticated, currentUser]);
-
-  // ----------  AUTH-HELPERS (add immediately after the last useState declaration) ----------
-  /* One-time check for stored auth  +  minute-by-minute expiry check */
-  useEffect(() => {
-    const stored = apiService.getStoredAuth();
-    if (stored) {
-      setCurrentUser(stored.user);
-      setIsAuthenticated(true);
-    }
-
-    const onExpired = () => {
-      handleLogout();
-      setError('Your session has expired. Please log in again.');
-    };
-    window.addEventListener('authExpired', onExpired);
-    return () => window.removeEventListener('authExpired', onExpired);
+    console.log('App mounted – loading models and sessions');
+    loadModels();
+    loadSessions();
   }, []);
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    const id = setInterval(() => {
-      if (!apiService.isAuthValid()) {
-        handleLogout();
-        setError('Your session has expired. Please log in again.');
-      }
-    }, 60_000);
-    return () => clearInterval(id);
-  }, [isAuthenticated]);
-  // ----------  END AUTH-HELPERS ----------
-
-  const handleLogin = (user: { id: string; username: string }) => {
-    setCurrentUser(user);
-    setIsAuthenticated(true);
-  };
-
-  const handleLogout = () => {
-    apiService.clearAuth();
-    setIsAuthenticated(false);
-    setCurrentUser(null);
-    // Reset all state when logging out
-    setCurrentSession(null);
-    setCurrentHypothesis(null);
-    setSessionHypotheses([]);
-    setSessions([]);
-    setModels([]);
-    setError(null);
-    setFeedback('');
-    setResearchGoal('');
-    setSelectedModel('');
-    setApiKey('');
-    removeAttachedImage();
-    setShowCreateSessionPanel(false);
-  };
 
   const loadModels = async () => {
     const result = await apiService.getModels();
@@ -212,9 +151,7 @@ function App() {
       }
       
       // Reload sessions list to update hypothesis count in left panel
-      if (currentUser) {
-        await loadSessions();
-      }
+      await loadSessions();
       // Clear attached image after successful generation
       removeAttachedImage();
     } else {
@@ -245,9 +182,7 @@ function App() {
       }
       
       // Reload sessions list to update hypothesis count in left panel
-      if (currentUser) {
-        await loadSessions();
-      }
+      await loadSessions();
       // Clear attached image after successful generation
       removeAttachedImage();
     } else {
@@ -279,9 +214,7 @@ function App() {
       }
       
       // Reload sessions list to update hypothesis count in left panel
-      if (currentUser) {
-        await loadSessions();
-      }
+      await loadSessions();
       // Clear attached image after successful generation
       removeAttachedImage();
     } else {
@@ -389,24 +322,12 @@ function App() {
     setImagePreview(null);
   };
 
-  // Show login page if not authenticated
-  if (!isAuthenticated) {
-    return <Login onLogin={handleLogin} />;
-  }
-
   return (
     <>
       {/* Header */}
       <header className="header">
         <img src="/images/wisteria_logo.png" alt="Wisteria logo" className="header-logo" />
         <h1 className="header-title">Wisteria Research Hypothesis Generator</h1>
-        <button
-          onClick={handleLogout}
-          className="btn btn-outline btn-sm"
-          style={{ marginLeft: 'auto' }}
-        >
-          Logout
-        </button>
       </header>
 
       {/* Error banner */}

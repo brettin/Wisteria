@@ -5,87 +5,14 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://dev-5.bv-brc.org/
 
 console.log('API_BASE_URL configured as:', API_BASE_URL);
 
-// ----------------- Auth / localStorage helpers -----------------
-interface AuthData {
-  user: { id: string; username: string };
-  token: string;
-  expiresAt: number;
-}
-const AUTH_KEY = 'wisteria_auth';
-const SESSION_MS = 24 * 60 * 60 * 1000; // 24 h
-
-const saveAuth = (user: any, token: string) => {
-  const data: AuthData = { user, token, expiresAt: Date.now() + SESSION_MS };
-  localStorage.setItem(AUTH_KEY, JSON.stringify(data));
-};
-
-const readAuth = (): AuthData | null => {
-  try {
-    const raw = localStorage.getItem(AUTH_KEY);
-    if (!raw) return null;
-    const data: AuthData = JSON.parse(raw);
-    if (Date.now() > data.expiresAt) {
-      clearAuth();
-      return null;
-    }
-    return data;
-  } catch {
-    clearAuth();
-    return null;
-  }
-};
-
-const clearAuth = () => localStorage.removeItem(AUTH_KEY);
-// ---------------------------------------------------------------
-
+// Create a simple axios instance without auth interceptors
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
 });
 
-api.interceptors.request.use((cfg) => {
-  const a = readAuth();
-  if (a?.token) cfg.headers.Authorization = `Bearer ${a.token}`;
-  return cfg;
-});
-api.interceptors.response.use(
-  (r) => r,
-  (err) => {
-    if (err.response?.status === 401) {
-      clearAuth();
-      window.dispatchEvent(new CustomEvent('authExpired'));
-    }
-    return Promise.reject(err);
-  }
-);
-
 export const apiService = {
-  // ----- auth helpers -----
-  saveAuth,
-  getStoredAuth: readAuth,
-  clearAuth,
-  isAuthValid: () => Boolean(readAuth()),
-
-  // ----- backend endpoints -----
-  login: async (username: string, password: string): Promise<ApiResponse<{ user: any; token: string }>> => {
-    try {
-      const res = await api.post('/auth/login', { username, password });
-      if (res.data.user && res.data.token) saveAuth(res.data.user, res.data.token);
-      return { data: { user: res.data.user, token: res.data.token }, message: res.data.message };
-    } catch (e: any) {
-      return { error: e.response?.data?.error || 'Login failed' };
-    }
-  },
-
-  createUser: async (username: string, password: string): Promise<ApiResponse<{ user: any }>> => {
-    try {
-      const res = await api.post('/auth/create-user', { username, password });
-      return { data: { user: res.data.user }, message: res.data.message };
-    } catch (e: any) {
-      return { error: e.response?.data?.error || 'User creation failed' };
-    }
-  },
-
+  // ----- backend endpoints (no auth required) -----
   healthCheck: async (): Promise<ApiResponse<{ status: string; message: string }>> => {
     try {
       const res = await api.get('/health');

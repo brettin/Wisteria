@@ -44,14 +44,46 @@ def verify_token(token):
 def token_required(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        auth = request.headers.get("Authorization", "")
-        parts = auth.split()
-        if len(parts) != 2:
-            return jsonify({"error": "Token missing"}), 401
-        user = verify_token(parts[1])
-        if not user:
-            return jsonify({"error": "Token invalid or expired"}), 401
-        request.current_user_id = user
+        """Decorator that validates a JWT token if provided, but also gracefully
+        allows requests without a token by assigning them to a shared
+        **public** user.  This lets the frontend operate without any explicit
+        authentication headers while still preserving the existing data model
+        that expects a valid ``user_id`` foreign-key on ``Session`` records.
+
+        Rules:
+        1. If an Authorization header with a Bearer token *is* sent, we verify
+           it exactly as before – invalid / expired tokens are rejected.
+        2. If **no** Authorization header is present, we lazily create (or
+           reuse) a dedicated "public" user account and attach its ``id`` to
+           the request context so downstream handlers continue to work
+           unchanged.
+        """
+
+        auth_header = request.headers.get("Authorization", "").strip()
+        parts = auth_header.split()
+
+        # --- Case 1: token supplied -------------------------------------------------
+        if len(parts) == 2:
+            token = parts[1]
+            user_id = verify_token(token)
+            if not user_id:
+                return jsonify({"error": "Token invalid or expired"}), 401
+            request.current_user_id = user_id
+            return func(*args, **kwargs)
+
+        # --- Case 2: no token supplied – fall back to public user ------------------
+        from app.models import User, db  # local import to avoid circular refs
+        public_username = "public"
+        public_user = User.query.filter_by(username=public_username).first()
+
+        if not public_user:
+            # Create a throw-away password hash (won't be used for login)
+            public_user = User(username=public_username)
+            public_user.set_password("public")
+            db.session.add(public_user)
+            db.session.commit()
+
+        request.current_user_id = public_user.id
         return func(*args, **kwargs)
     return wrapper
 # -----------------------------------------------------------------------
@@ -152,11 +184,16 @@ def get_available_models():
         return jsonify({'error': str(e)}), 500
 
 @api.route('/sessions', methods=['GET'])
-@token_required
 def get_sessions():
-    user_id = request.current_user_id
-    sessions = Session.query.filter_by(user_id=user_id) \
-                            .order_by(Session.created_at.desc()).all()
+    """Return **all** sessions in the database, newest first.
+
+    The previous behaviour restricted the list to the authenticated user.
+    Since the application has moved to a completely public model we now
+    expose every session irrespective of ownership so the frontend can show
+    a consolidated catalogue.
+    """
+
+    sessions = Session.query.order_by(Session.created_at.desc()).all()
     return jsonify({'sessions': [s.to_dict() for s in sessions]})
 
 @api.route('/sessions', methods=['POST'])
@@ -608,4 +645,35 @@ def download_hypothesis_pdf(session_id, hypothesis_id):
         )
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500 
+        return jsonify({'error': str(e)}), 500
+
+# -------------------- Public user auto-assignment --------------------
+
+# Ensure every request handled by this blueprint has a user context.  If
+# ``token_required`` already added ``request.current_user_id`` we respect it.
+@api.before_request
+def ensure_public_user():
+    """Attach a default *public* user to the request if no user has been
+    identified yet (i.e., endpoints that are *not* decorated with
+    ``@token_required``). This guarantees that *all* routes work without any
+    authentication headers while still keeping the database schema (which
+    expects a non-null ``user_id``) intact.
+    """
+
+    if getattr(request, "current_user_id", None):
+        # Already set by token_required
+        return
+
+    from app.models import User, db  # Local import to avoid circular refs
+
+    public_username = "public"
+    public_user = User.query.filter_by(username=public_username).first()
+
+    if not public_user:
+        public_user = User(username=public_username)
+        public_user.set_password("public")
+        db.session.add(public_user)
+        db.session.commit()
+
+    request.current_user_id = public_user.id
+# --------------------------------------------------------------------- 
