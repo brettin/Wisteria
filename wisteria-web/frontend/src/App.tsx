@@ -14,7 +14,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   
   // Panel control state
-  const [showCreateSessionPanel, setShowCreateSessionPanel] = useState(false);
+  const [showCreateSessionPanel, setShowCreateSessionPanel] = useState(true);
   
   // Form states
   const [researchGoal, setResearchGoal] = useState('');
@@ -386,7 +386,7 @@ function App() {
           <div className="card">
             {showCreateSessionPanel ? (
               <div>
-                <h2>Create New Session</h2>
+                <h2 style={{ marginTop: '0rem' }}>Create New Session</h2>
                 <div className="form-group">
                   <label>Research Goal</label>
                   <textarea
