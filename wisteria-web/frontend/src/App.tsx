@@ -337,7 +337,7 @@ function App() {
       <div className="main-grid">
         {/* Sidebar */}
         <aside className="sidebar">
-          <div className="sidebar-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <div className="sidebar-header">
             <h2 style={{ margin: 0 }}>Sessions</h2>
             <button
               onClick={() => {
@@ -353,29 +353,31 @@ function App() {
             </button>
           </div>
 
-          {sessions.map((session) => (
-            <div
-              key={session.id}
-              className={`session-card ${currentSession?.id === session.id ? 'active' : ''}`}
-              onClick={() => selectSession(session)}
-            >
-              <h4 className="session-card-title">{session.research_goal}</h4>
-              <p className="session-card-meta">{session.model_shortname}</p>
-              <p className="session-card-meta">{new Date(session.created_at).toLocaleDateString()}</p>
-              <p className="session-card-hypo-count">{session.hypothesis_count || 0} hypotheses</p>
-
-              <button
-                className="delete-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  deleteSession(session.id);
-                }}
-                title="Delete session"
+          <div className="sessions-list">
+            {sessions.map((session) => (
+              <div
+                key={session.id}
+                className={`session-card ${currentSession?.id === session.id ? 'active' : ''}`}
+                onClick={() => selectSession(session)}
               >
-                ×
-              </button>
-            </div>
-          ))}
+                <h4 className="session-card-title">{session.research_goal}</h4>
+                <p className="session-card-meta">{session.model_shortname}</p>
+                <p className="session-card-meta">{new Date(session.created_at).toLocaleDateString()}</p>
+                <p className="session-card-hypo-count">{session.hypothesis_count || 0} hypotheses</p>
+
+                <button
+                  className="delete-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteSession(session.id);
+                  }}
+                  title="Delete session"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
         </aside>
 
         {/* Content */}
