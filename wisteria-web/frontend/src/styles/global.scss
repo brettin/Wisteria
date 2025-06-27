@@ -86,6 +86,7 @@ button {
   background: #fff;
   padding: 24px 16px;
   overflow-y: auto;
+  max-height: 80vh;
   border-radius: $radius;
   border: 1px solid $gray-300;
   box-shadow: $shadow-sm;
