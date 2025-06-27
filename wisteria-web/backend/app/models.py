@@ -2,6 +2,35 @@ from app import db
 from datetime import datetime
 import uuid
 import json
+from werkzeug.security import generate_password_hash, check_password_hash
+
+class User(db.Model):
+    """User model for authentication"""
+    __tablename__ = 'users'
+    
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationship to sessions
+    sessions = db.relationship('Session', backref='user', lazy=True)
+    
+    def set_password(self, password):
+        """Hash and set the password"""
+        self.password_hash = generate_password_hash(password)
+    
+    def check_password(self, password):
+        """Check if the provided password matches the hash"""
+        return check_password_hash(self.password_hash, password)
+    
+    def to_dict(self):
+        """Convert user to dictionary (excluding password)"""
+        return {
+            'id': self.id,
+            'username': self.username,
+            'created_at': self.created_at.isoformat()
+        }
 
 class Session(db.Model):
     """Research session model"""
@@ -14,6 +43,9 @@ class Session(db.Model):
     api_key = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # New: associate session with a user
+    user_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
     
     # Relationships
     hypotheses = db.relationship('Hypothesis', backref='session', lazy=True, cascade='all, delete-orphan')
@@ -28,7 +60,8 @@ class Session(db.Model):
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat(),
             'hypothesis_count': len(self.hypotheses),
-            'api_key': self.api_key
+            'api_key': self.api_key,
+            'user_id': self.user_id
         }
 
 class Hypothesis(db.Model):

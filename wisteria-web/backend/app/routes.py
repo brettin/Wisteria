@@ -1,10 +1,12 @@
 from flask import Blueprint, request, jsonify, send_file
-from app.models import Session, Hypothesis, db
+from app.models import Session, Hypothesis, User, db
 from app.services import HypothesisService, load_model_config
 import yaml
 import os
 import io
-from datetime import datetime
+from datetime import datetime, timedelta
+import jwt
+from functools import wraps
 
 # PDF generation imports
 try:
@@ -18,6 +20,114 @@ except ImportError:
     PDF_AVAILABLE = False
 
 api = Blueprint('api', __name__)
+
+# ---------- JWT CONFIG & HELPERS (add once, near top of file) ----------
+JWT_SECRET = os.environ.get("JWT_SECRET", "change-me-in-production")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = 24
+
+def generate_token(user_id):
+    payload = {
+        "user_id": user_id,
+        "exp": datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS),
+        "iat": datetime.utcnow(),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+def verify_token(token):
+    try:
+        data = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return data["user_id"]
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        return None
+
+def token_required(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        auth = request.headers.get("Authorization", "")
+        parts = auth.split()
+        if len(parts) != 2:
+            return jsonify({"error": "Token missing"}), 401
+        user = verify_token(parts[1])
+        if not user:
+            return jsonify({"error": "Token invalid or expired"}), 401
+        request.current_user_id = user
+        return func(*args, **kwargs)
+    return wrapper
+# -----------------------------------------------------------------------
+
+@api.route('/auth/login', methods=['POST'])
+def login():
+    """Authenticate user login"""
+    try:
+        data = request.get_json()
+        
+        if not data or 'username' not in data or 'password' not in data:
+            return jsonify({'error': 'Username and password are required'}), 400
+        
+        username = data['username'].strip()
+        password = data['password']
+        
+        if not username or not password:
+            return jsonify({'error': 'Username and password cannot be empty'}), 400
+        
+        # Find user by username
+        user = User.query.filter_by(username=username).first()
+        
+        if not user or not user.check_password(password):
+            return jsonify({'error': 'Invalid username or password'}), 401
+        
+        token = generate_token(user.id)
+        return jsonify({
+            'message': 'Login successful',
+            'user': user.to_dict(),
+            'token': token
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/auth/create-user', methods=['POST'])
+def create_user():
+    """Create a new user account"""
+    try:
+        data = request.get_json()
+        
+        if not data or 'username' not in data or 'password' not in data:
+            return jsonify({'error': 'Username and password are required'}), 400
+        
+        username = data['username'].strip()
+        password = data['password']
+        
+        if not username or not password:
+            return jsonify({'error': 'Username and password cannot be empty'}), 400
+        
+        if len(username) < 3:
+            return jsonify({'error': 'Username must be at least 3 characters long'}), 400
+        
+        if len(password) < 6:
+            return jsonify({'error': 'Password must be at least 6 characters long'}), 400
+        
+        # Check if username already exists
+        existing_user = User.query.filter_by(username=username).first()
+        if existing_user:
+            return jsonify({'error': 'Username already exists'}), 409
+        
+        # Create new user
+        user = User(username=username)
+        user.set_password(password)
+        
+        db.session.add(user)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'User created successfully',
+            'user': user.to_dict()
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 @api.route('/models', methods=['GET'])
 def get_available_models():
@@ -42,47 +152,45 @@ def get_available_models():
         return jsonify({'error': str(e)}), 500
 
 @api.route('/sessions', methods=['GET'])
+@token_required
 def get_sessions():
-    """Get all sessions"""
-    try:
-        sessions = Session.query.order_by(Session.created_at.desc()).all()
-        return jsonify({
-            'sessions': [session.to_dict() for session in sessions]
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    user_id = request.current_user_id
+    sessions = Session.query.filter_by(user_id=user_id) \
+                            .order_by(Session.created_at.desc()).all()
+    return jsonify({'sessions': [s.to_dict() for s in sessions]})
 
 @api.route('/sessions', methods=['POST'])
+@token_required
 def create_session():
-    """Create a new research session"""
+    data = request.get_json() or {}
+    if 'research_goal' not in data or 'model_shortname' not in data:
+        return jsonify({'error': 'research_goal and model_shortname are required'}), 400
+
+    research_goal = data['research_goal'].strip()
+    model_shortname = data['model_shortname'].strip()
+    api_key = data.get('api_key', '').strip()
+    user_id = request.current_user_id
+
+    if not research_goal:
+        return jsonify({'error': 'research_goal cannot be empty'}), 400
+    
+    # Validate model exists
     try:
-        data = request.get_json()
-        
-        if not data or 'research_goal' not in data or 'model_shortname' not in data:
-            return jsonify({'error': 'research_goal and model_shortname are required'}), 400
-        
-        research_goal = data['research_goal'].strip()
-        model_shortname = data['model_shortname'].strip()
-        api_key = data.get('api_key', '').strip()
-        
-        if not research_goal:
-            return jsonify({'error': 'research_goal cannot be empty'}), 400
-        
-        # Validate model exists
-        try:
-            load_model_config(model_shortname)
-        except Exception as e:
-            return jsonify({'error': f'Invalid model: {str(e)}'}), 400
-        
-        session = HypothesisService.create_session(research_goal, model_shortname, api_key)
-        
-        return jsonify({
-            'message': 'Session created successfully',
-            'session': session.to_dict()
-        }), 201
-        
+        load_model_config(model_shortname)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f'Invalid model: {str(e)}'}), 400
+    
+    # Validate user exists
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    session = HypothesisService.create_session(research_goal, model_shortname, api_key, user_id)
+    
+    return jsonify({
+        'message': 'Session created successfully',
+        'session': session.to_dict()
+    }), 201
 
 @api.route('/sessions/<session_id>', methods=['GET'])
 def get_session(session_id):

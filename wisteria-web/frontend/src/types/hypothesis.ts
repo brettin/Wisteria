@@ -31,6 +31,7 @@ export interface Session {
   created_at: string;
   updated_at: string;
   hypothesis_count: number;
+  user_id: string;
   hypotheses?: Hypothesis[];
 }
 
