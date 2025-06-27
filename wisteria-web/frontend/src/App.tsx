@@ -7,6 +7,8 @@ import Login from './components/Login';
 function App() {
   // Authentication state
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // Store logged in user information
+  const [currentUser, setCurrentUser] = useState<{ id: string; username: string } | null>(null);
   
   const [models, setModels] = useState<Model[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -38,16 +40,50 @@ function App() {
     if (isAuthenticated) {
       console.log('App useEffect triggered - loading models and sessions');
       loadModels();
-      loadSessions();
+      if (currentUser) {
+        loadSessions();
+      }
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, currentUser]);
 
-  const handleLogin = () => {
+  // ----------  AUTH-HELPERS (add immediately after the last useState declaration) ----------
+  /* One-time check for stored auth  +  minute-by-minute expiry check */
+  useEffect(() => {
+    const stored = apiService.getStoredAuth();
+    if (stored) {
+      setCurrentUser(stored.user);
+      setIsAuthenticated(true);
+    }
+
+    const onExpired = () => {
+      handleLogout();
+      setError('Your session has expired. Please log in again.');
+    };
+    window.addEventListener('authExpired', onExpired);
+    return () => window.removeEventListener('authExpired', onExpired);
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const id = setInterval(() => {
+      if (!apiService.isAuthValid()) {
+        handleLogout();
+        setError('Your session has expired. Please log in again.');
+      }
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [isAuthenticated]);
+  // ----------  END AUTH-HELPERS ----------
+
+  const handleLogin = (user: { id: string; username: string }) => {
+    setCurrentUser(user);
     setIsAuthenticated(true);
   };
 
   const handleLogout = () => {
+    apiService.clearAuth();
     setIsAuthenticated(false);
+    setCurrentUser(null);
     // Reset all state when logging out
     setCurrentSession(null);
     setCurrentHypothesis(null);
@@ -73,14 +109,10 @@ function App() {
   };
 
   const loadSessions = async () => {
-    console.log('loadSessions called - about to call apiService.getSessions()');
-    const result = await apiService.getSessions();
-    console.log('loadSessions result:', result);
-    if (result.data) {
-      setSessions(result.data);
-    } else {
-      setError(result.error || 'Failed to load sessions');
-    }
+    console.log('loadSessions()');
+    const res = await apiService.getSessions();
+    if (res.data) setSessions(res.data);
+    else setError(res.error || 'Failed to load sessions');
   };
 
   const createNewSession = async () => {
@@ -88,14 +120,17 @@ function App() {
       setError('Please provide a research goal and select a model');
       return;
     }
-
     setLoading(true);
     setError(null);
 
-    const result = await apiService.createSession(researchGoal, selectedModel, apiKey);
-    if (result.data) {
-      setCurrentSession(result.data);
-      setSessions([result.data, ...sessions]);
+    const res = await apiService.createSession(
+      researchGoal,
+      selectedModel,
+      apiKey
+    );
+    if (res.data) {
+      setCurrentSession(res.data);
+      setSessions([res.data, ...sessions]);
       // Clear hypothesis state for new session
       setCurrentHypothesis(null);
       setSessionHypotheses([]);
@@ -103,7 +138,7 @@ function App() {
 
       // Generate first hypothesis immediately with comments/image if provided
       const commentsToSend = feedback.trim() || undefined;
-      const hypothesisResult = await apiService.generateHypothesis(result.data.id, commentsToSend, attachedImage || undefined);
+      const hypothesisResult = await apiService.generateHypothesis(res.data.id, commentsToSend, attachedImage || undefined);
       
       if (hypothesisResult.data) {
         setCurrentHypothesis(hypothesisResult.data);
@@ -111,7 +146,7 @@ function App() {
         setHypothesisIndex(0);
         
         // Refresh session to get updated hypothesis count
-        const sessionResult = await apiService.getSession(result.data.id);
+        const sessionResult = await apiService.getSession(res.data.id);
         if (sessionResult.data) {
           updateSessionData(sessionResult.data);
           // Keep local hypothesis list in sync with backend
@@ -135,7 +170,7 @@ function App() {
       // Switch back to hypothesis panel
       setShowCreateSessionPanel(false);
     } else {
-      setError(result.error || 'Failed to create session');
+      setError(res.error || 'Failed to create session');
     }
     setLoading(false);
   };
@@ -177,7 +212,9 @@ function App() {
       }
       
       // Reload sessions list to update hypothesis count in left panel
-      await loadSessions();
+      if (currentUser) {
+        await loadSessions();
+      }
       // Clear attached image after successful generation
       removeAttachedImage();
     } else {
@@ -208,7 +245,9 @@ function App() {
       }
       
       // Reload sessions list to update hypothesis count in left panel
-      await loadSessions();
+      if (currentUser) {
+        await loadSessions();
+      }
       // Clear attached image after successful generation
       removeAttachedImage();
     } else {
@@ -240,7 +279,9 @@ function App() {
       }
       
       // Reload sessions list to update hypothesis count in left panel
-      await loadSessions();
+      if (currentUser) {
+        await loadSessions();
+      }
       // Clear attached image after successful generation
       removeAttachedImage();
     } else {

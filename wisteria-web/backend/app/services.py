@@ -448,7 +448,7 @@ class HypothesisService:
     """Service class for managing hypotheses"""
     
     @staticmethod
-    def create_session(research_goal: str, model_shortname: str, api_key: str) -> Session:
+    def create_session(research_goal: str, model_shortname: str, api_key: str, user_id: str) -> Session:
         """Create a new research session"""
         try:
             # Load model configuration to validate
@@ -458,7 +458,8 @@ class HypothesisService:
                 research_goal=research_goal,
                 model_name=model_config['model_name'],
                 model_shortname=model_shortname,
-                api_key=api_key
+                api_key=api_key,
+                user_id=user_id
             )
             
             db.session.add(session)

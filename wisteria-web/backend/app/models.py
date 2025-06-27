@@ -13,6 +13,9 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
+    # Relationship to sessions
+    sessions = db.relationship('Session', backref='user', lazy=True)
+    
     def set_password(self, password):
         """Hash and set the password"""
         self.password_hash = generate_password_hash(password)
@@ -41,6 +44,9 @@ class Session(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
+    # New: associate session with a user
+    user_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
+    
     # Relationships
     hypotheses = db.relationship('Hypothesis', backref='session', lazy=True, cascade='all, delete-orphan')
     
@@ -54,7 +60,8 @@ class Session(db.Model):
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat(),
             'hypothesis_count': len(self.hypotheses),
-            'api_key': self.api_key
+            'api_key': self.api_key,
+            'user_id': self.user_id
         }
 
 class Hypothesis(db.Model):

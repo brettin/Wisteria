@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { apiService } from '../services/api';
 
 interface LoginProps {
-  onLogin: () => void;
+  onLogin: (user: { id: string; username: string }) => void;
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
@@ -36,8 +36,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         const result = await apiService.login(username, password);
         if (result.error) {
           setError(result.error);
-        } else {
-          onLogin();
+        } else if (result.data?.user) {
+          onLogin(result.data.user);
         }
       }
     } catch (error: any) {
