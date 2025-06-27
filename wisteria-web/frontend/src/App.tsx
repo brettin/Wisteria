@@ -198,6 +198,7 @@ function App() {
     setError(null);
 
     const commentsToSend = feedback.trim() || undefined;
+
     const result = await apiService.generateNewHypothesis(currentSession.id, commentsToSend, attachedImage || undefined);
     if (result.data) {
       setCurrentHypothesis(result.data);

@@ -279,6 +279,7 @@ def generate_hypothesis(session_id):
             # JSON payload may include comments
             data_json = request.get_json(silent=True) or {}
             comments = (data_json.get('comments') or '').strip() or None
+
         hypothesis = HypothesisService.generate_initial_hypothesis(session_id, image_b64=image_b64, initial_comments=comments)
         
         return jsonify({

@@ -92,3 +92,4 @@ hypotheses_*.json
 
 pm2_output/*
 *.nfs*
+*.pid

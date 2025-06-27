@@ -148,8 +148,8 @@ ADDITIONAL COMMENTS:
                 'status': 'generating',
                 'message': 'Generating hypothesis...'
             }, room=session_id)
-        
         # Create a new client instance
+
         try:
             client = openai.OpenAI(
                 api_key=api_key
