@@ -1,0 +1,23 @@
+Backend:
+
+1)
+	cd wisteria-web/backend
+	python -m venv venv          # create venv (once)
+	source venv/bin/activate     # activate it
+	pip install -r requirements.txt
+
+2)
+	BACKEND_PORT=12005 python run.py
+
+
+Frontend:
+
+1)
+	cd wisteria-web/frontend
+	npm install
+
+2) 
+	REACT_APP_API_URL=http://localhost:12005/api \
+	PORT=12001 \
+	npm start
+

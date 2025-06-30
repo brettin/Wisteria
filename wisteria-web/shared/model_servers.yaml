@@ -2,41 +2,41 @@ servers:
   # OpenAI GPT-4 (Latest)
   - server: "api.openai.com"
     shortname: "gpt4"
-    openai_api_key: "${OPENAI_API_KEY}"
     openai_api_base: "https://api.openai.com/v1"
     openai_model: "gpt-4"
 
   # OpenAI GPT-4 Turbo
   - server: "api.openai.com"
     shortname: "gpt4turbo"
-    openai_api_key: "${OPENAI_API_KEY}"
     openai_api_base: "https://api.openai.com/v1"
     openai_model: "gpt-4-turbo"
 
   # OpenAI GPT-3.5 Turbo
   - server: "api.openai.com"
     shortname: "gpt35"
-    openai_api_key: "${OPENAI_API_KEY}"
     openai_api_base: "https://api.openai.com/v1"
     openai_model: "gpt-3.5-turbo"
 
   # OpenAI O1 (Latest)
   - server: "api.openai.com"
     shortname: "o1"
-    openai_api_key: "${OPENAI_API_KEY}"
     openai_api_base: "https://api.openai.com/v1"
     openai_model: "o1"
 
   # OpenAI O1-mini
   - server: "api.openai.com"
     shortname: "o1mini"
-    openai_api_key: "${OPENAI_API_KEY}"
     openai_api_base: "https://api.openai.com/v1"
     openai_model: "o1-mini"
 
-  # Local vLLM Server - Llama 3.1 8B
-  - server: "localhost:9999"
+  # Remote vLLM Server - Llama 3.1 8B
+  - server: "rbh101.cels.anl.gov:9999"
     shortname: "scout"
-    openai_api_key: "${SCOUT_API_KEY}"
-    openai_api_base: "http://localhost:9999/v1"
+    openai_api_base: "http://rbh101.cels.anl.gov:9999/v1"
     openai_model: "scout"
+
+  # Remote vLLM Server - Llama 3.3 70B
+  - server: "rbdgx2.cels.anl.gov:9999"
+    shortname: "llama70b"
+    openai_api_base: "http://rbdgx2.cels.anl.gov:9999/v1"
+    openai_model: "meta-llama/Llama-3.3-70B-Instruct"
